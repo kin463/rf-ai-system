@@ -2,34 +2,55 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>R&F AI Assistant</title>
+    <title>R&F AIアシスタント</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f6f9; }
+        .chat-container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        #chatMessages { height: 300px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-bottom: 10px; }
+        .message { margin-bottom: 10px; line-height: 1.5; }
+        .user { color: #1d56df; font-weight: bold; }
+        .ai { color: #333; }
+        textarea { width: 100%; height: 60px; margin-bottom: 10px; }
+    </style>
 </head>
 <body>
-    <h1>AI アシスタント</h1>
-    <div id="chat"></div>
-    <input type="text" id="userInput" placeholder="質問を入力...">
-    <button onclick="sendMessage()">送信</button>
 
-    <script>
-        async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const chat = document.getElementById('chat');
-            const message = input.value;
-            if (!message) return;
+<div class="chat-container">
+    <h2>🤖 AIアシスタント</h2>
+    <div id="chatMessages"></div>
+    <textarea id="userInput" placeholder="質問を入力してください..."></textarea>
+    <button id="sendBtn" onclick="sendMessage()">送信</button>
+</div>
 
-            try {
-                // 這是正確的線上 API 路徑
-                const response = await fetch('https://rf-ai-system.onrender.com/api/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: message })
-                });
-                const data = await response.json();
-                chat.innerHTML += `<p>AI: ${data.answer}</p>`;
-            } catch (err) {
-                console.error(err);
-            }
+<script>
+    async function sendMessage() {
+        const userInput = document.getElementById('userInput');
+        const chatMessages = document.getElementById('chatMessages');
+        const question = userInput.value.trim();
+        
+        if (!question) return;
+
+        chatMessages.innerHTML += `<div class="message"><span class="user">あなた:</span> ${question}</div>`;
+        userInput.value = '';
+
+        try {
+            const response = await fetch('https://rf-ai-system.onrender.com/api/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: question })
+            });
+
+            if (!response.ok) throw new Error('接続エラー');
+
+            const data = await response.json();
+            chatMessages.innerHTML += `<div class="message"><span class="ai">AI:</span> ${data.answer}</div>`;
+        } catch (error) {
+            chatMessages.innerHTML += `<div class="message" style="color: red;">エラー: 通信に失敗しました。</div>`;
         }
-    </script>
+        
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+</script>
+
 </body>
 </html>
