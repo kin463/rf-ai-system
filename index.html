@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R&F株式会社 - AIアシスタント</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        /* ヘッダー部分 */
+        header {
+            background-color: #1d56df;
+            color: white;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        header p {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 4px;
+            letter-spacing: 0.5px;
+        }
+        /* メインレイアウト */
+        main {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            padding: 25px;
+            overflow: hidden;
+        }
+        /* チャットコンテナ全体 */
+        .chat-container {
+            width: 100%;
+            max-width: 1200px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #eef2f5;
+        }
+        /* チャットのヘッダー（ご指定のテキストと(Grok)を削除） */
+        .chat-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid #f0f2f5;
+            background-color: #fafbfd;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+        .chat-header h2 {
+            font-size: 18px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        /* ログ表示エリア */
+        .chat-messages {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .message {
+            max-width: 85%;
+            padding: 14px 18px;
+            border-radius: 10px;
+            line-height: 1.6;
+            font-size: 15px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .user-message {
+            background-color: #e3edff;
+            color: #1d56df;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+        .bot-message {
+            background-color: #f1f3f5;
+            color: #2c3e50;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+        .error-message {
+            background-color: #ffeef0;
+            color: #d9383a;
+            align-self: flex-start;
+            border: 1px solid #fcc6cb;
+        }
+        /* 入力エリア */
+        .chat-input-area {
+            padding: 20px 30px;
+            border-top: 1px solid #f0f2f5;
+            background-color: #ffffff;
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+        }
+        textarea {
+            flex: 1;
+            height: 50px;
+            padding: 14px;
+            border: 1px solid #ccd4e0;
+            border-radius: 8px;
+            resize: none;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            border-color: #1d56df;
+        }
+        button {
+            background-color: #1d56df;
+            color: white;
+            border: none;
+            padding: 0 28px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #143fba;
+        }
+        button:disabled {
+            background-color: #a0b6ed;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. トップヘッダー（右側の「検証版バッジ」を削除しました） -->
+    <header>
+        <div>
+            <h1>R & F 株式会社</h1>
+            <p>ONE FOR ALL ALL FOR ONE</p>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main>
+        <div class="chat-container">
+            <!-- 2. チャットヘッダー（(Grok)表記と説明文テキストを削除しました） -->
+            <div class="chat-header">
+                <h2>🤖 AIアシスタント</h2>
+            </div>
+
+            <!-- チャット履歴 -->
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot-message">お疲れ様です！何か困ったことや、社内手続きについて知りたいことはありますか？</div>
+            </div>
+
+            <!-- 入力欄 -->
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <textarea id="userInput" placeholder="質問を入力してください（Ctrl + Enter で送信）..."></textarea>
+                    <button id="sendBtn" onclick="sendMessage()">送信</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const userInput = document.getElementById('userInput');
+        const chatMessages = document.getElementById('chatMessages');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // キーボードの Ctrl + Enter でも送信可能にする設定
+        userInput.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            const question = userInput.value.trim();
+            if (!question) return;
+
+            // ユーザーの質問を画面に追加
+            appendMessage(question, 'user-message');
+            userInput.value = '';
+            
+            // ボタンの無効化とローディング状態
+            sendBtn.disabled = true;
+            sendBtn.innerText = '通信中...';
+
+            try {
+                // バックエンドのFastAPIにリクエストを送信
+                const response = await fetch('http://127.0.0.1:8000/api/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question: question })
+                });
+
+                if (!response.ok) {
+                    throw new Error('サーバーエラーが発生しました。');
+                }
+
+                const data = await response.json();
+                // AIからの回答を画面に追加
+                appendMessage(data.answer, 'bot-message');
+
+            } catch (error) {
+                // エラー時の表示
+                appendMessage('エラー: バックエンドからの応答に失敗しました。', 'error-message');
+                console.error(error);
+            } finally {
+                // ボタンを元に戻す
+                sendBtn.disabled = false;
+                sendBtn.innerText = '送信';
+            }
+        }
+
+        function appendMessage(text, className) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${className}`;
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            
+            // 常に最新のメッセージが見えるように最下部へスクロール
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    </script>
+</body>
+</html>
