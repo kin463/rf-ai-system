@@ -2,20 +2,29 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>AIアシスタント</title>
+    <title>R&F AIアシスタント</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        textarea { width: 100%; max-width: 600px; padding: 10px; }
+    </style>
 </head>
 <body>
-    <h1>🤖 AIアシスタント</h1>
-    <textarea id="output" rows="10" cols="60" readonly></textarea><br>
-    <textarea id="input" rows="3" cols="60" placeholder="質問を入力..."></textarea><br>
+    <h1>🤖 R&F 社内AIアシスタント</h1>
+    <textarea id="output" rows="15" readonly></textarea><br>
+    <textarea id="input" rows="3" placeholder="質問を入力..."></textarea><br>
     <button onclick="sendQuestion()">送信</button>
 
     <script>
         async function sendQuestion() {
             const output = document.getElementById('output');
-            const question = document.getElementById('input').value;
-            output.value += "\nあなた: " + question;
+            const input = document.getElementById('input');
+            const question = input.value.trim();
             
+            if (!question) return;
+
+            output.value += "\n\nあなた: " + question;
+            input.value = ""; // 送信後にクリア
+
             try {
                 const response = await fetch('/api/ask', {
                     method: 'POST',
@@ -23,9 +32,9 @@
                     body: JSON.stringify({question: question})
                 });
                 const data = await response.json();
-                output.value += "\nAI: " + (data.answer || data.detail);
+                output.value += "\nAI: " + (data.answer || "エラーが発生しました");
             } catch (e) {
-                output.value += "\nAI: 通信エラーが発生しました。";
+                output.value += "\nAI: サーバーとの通信に失敗しました。";
             }
         }
     </script>
