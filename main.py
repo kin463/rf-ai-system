@@ -18,11 +18,15 @@ async def get_index():
 
 @app.post("/api/ask")
 async def ask_grok(payload: QueryRequest):
-    if not os.path.exists("rules.txt"):
-        return {"answer": "システムエラー: マニュアルファイルが見つかりません。"}
+    # 分割讀取兩個檔案以節省內存
+    rules_content = ""
+    for filename in ["rules_part1.txt", "rules_part2.txt"]:
+        if os.path.exists(filename):
+            with open(filename, "r", encoding="utf-8") as f:
+                rules_content += f.read() + "\n"
     
-    with open("rules.txt", "r", encoding="utf-8") as f:
-        rules_content = f.read()
+    if not rules_content:
+        return {"answer": "システムエラー: マニュアルファイルが見つかりません。"}
 
     api_key = os.environ.get("GROQ_API_KEY")
     
@@ -33,18 +37,18 @@ async def ask_grok(payload: QueryRequest):
             json={
                 "model": "llama-3.1-8b-instant",
                 "messages": [
-                    {"role": "system", "content": f"社内規定マニュアルに基づき、簡潔に回答せよ：\n{rules_content}"},
+                    {"role": "system", "content": f"社内規定に基づき、簡潔に回答せよ：\n{rules_content}"},
                     {"role": "user", "content": payload.question}
                 ],
                 "temperature": 0.0
             }
         )
-        
         if response.status_code == 429:
-            return {"answer": "現在AIが混雑しています。1分ほど待ってから再度送信してください。"}
-        
+            return {"answer": "AIが混雑しています。1分待ってから再送してください。"}
+        if response.status_code == 413:
+            return {"answer": "エラー：データが大きすぎます。マニュアルをさらに分割してください。"}
+            
         response.raise_for_status()
         return {"answer": response.json()["choices"][0]["message"]["content"]}
-        
     except Exception as e:
         return {"answer": f"通信エラー: {str(e)}"}
