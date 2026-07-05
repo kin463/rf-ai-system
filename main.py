@@ -1,9 +1,9 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import requests
-import os
 
 app = FastAPI()
 
@@ -18,16 +18,22 @@ async def get_index():
 
 @app.post("/api/ask")
 async def ask_grok(payload: QueryRequest):
-    # 分割讀取兩個檔案以節省內存
-    rules_content = ""
-    for filename in ["rules_part1.txt", "rules_part2.txt"]:
-        if os.path.exists(filename):
-            with open(filename, "r", encoding="utf-8") as f:
-                rules_content += f.read() + "\n"
+    # ファイルがあるべきディレクトリ（プログラムと同じ場所）を明示
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     
-    if not rules_content:
-        return {"answer": "システムエラー: マニュアルファイルが見つかりません。"}
-
+    # 読み込むファイルリスト（GitHubに存在するファイル名を正確に記載）
+    # もし rules.txt と rules.txt2 があるなら以下のように指定
+    files_to_read = ["rules.txt", "rules.txt2"]
+    
+    rules_content = ""
+    for filename in files_to_read:
+        file_path = os.path.join(base_dir, filename)
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                rules_content += f.read() + "\n"
+        else:
+            return {"answer": f"エラー: {filename} が見つかりません。パス: {file_path}"}
+    
     api_key = os.environ.get("GROQ_API_KEY")
     
     try:
@@ -37,16 +43,15 @@ async def ask_grok(payload: QueryRequest):
             json={
                 "model": "llama-3.1-8b-instant",
                 "messages": [
-                    {"role": "system", "content": f"社内規定に基づき、簡潔に回答せよ：\n{rules_content}"},
+                    {"role": "system", "content": f"以下の社内規定に基づき、簡潔に回答せよ：\n{rules_content}"},
                     {"role": "user", "content": payload.question}
                 ],
                 "temperature": 0.0
             }
         )
+        
         if response.status_code == 429:
             return {"answer": "AIが混雑しています。1分待ってから再送してください。"}
-        if response.status_code == 413:
-            return {"answer": "エラー：データが大きすぎます。マニュアルをさらに分割してください。"}
             
         response.raise_for_status()
         return {"answer": response.json()["choices"][0]["message"]["content"]}
