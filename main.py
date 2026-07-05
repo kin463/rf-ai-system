@@ -7,7 +7,6 @@ import os
 
 app = FastAPI()
 
-# CORS設定
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,18 +25,13 @@ async def get_index():
 
 @app.post("/api/ask")
 async def ask_grok(payload: QueryRequest):
-    # rules.txtの読み込み
-    try:
-        with open("rules.txt", "r", encoding="utf-8") as f:
-            rules_content = f.read()
-    except:
-        raise HTTPException(status_code=500, detail="rules.txt が見つかりません")
+    if not os.path.exists("rules.txt"):
+        raise HTTPException(status_code=500, detail="rules.txt not found")
+        
+    with open("rules.txt", "r", encoding="utf-8") as f:
+        rules_content = f.read()
 
-    system_instruction = (
-        "あなたはＲ＆Ｆ株式会社の厳格な社内AIアシスタントです。"
-        "以下の【社内マニュアル】のみに基づき回答してください。\n\n"
-        f"【社内マニュアル】\n{rules_content}"
-    )
+    system_instruction = f"あなたはＲ＆Ｆ株式会社の厳格な社内AIアシスタントです。以下のマニュアルに基づき回答してください。\n\n{rules_content}"
 
     try:
         response = requests.post(
@@ -52,10 +46,8 @@ async def ask_grok(payload: QueryRequest):
             },
             headers={"Authorization": f"Bearer {GROK_API_KEY}"}
         )
-        return {"answer": response.json()["choices"][0]["message"]["content"]}
+        response.raise_for_status()
+        answer = response.json()["choices"][0]["message"]["content"]
+        return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=10000)
