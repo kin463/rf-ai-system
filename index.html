@@ -2,96 +2,42 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>R&F株式会社 - AIアシスタント</title>
+    <title>R&F AIアシスタント</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f6f9; color: #333; display: flex; flex-direction: column; height: 100vh; }
-        header { background-color: #1d56df; color: white; padding: 20px 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        main { flex: 1; display: flex; justify-content: center; padding: 25px; overflow: hidden; }
-        .chat-container { width: 100%; max-width: 1200px; background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
-        .chat-header { padding: 20px 30px; border-bottom: 1px solid #f0f2f5; background-color: #fafbfd; }
-        .chat-messages { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
-        .message { max-width: 85%; padding: 14px 18px; border-radius: 10px; line-height: 1.6; font-size: 15px; white-space: pre-wrap; }
-        .user-message { background-color: #e3edff; color: #1d56df; align-self: flex-end; }
-        .bot-message { background-color: #f1f3f5; color: #2c3e50; align-self: flex-start; }
-        .error-message { background-color: #ffeef0; color: #d9383a; align-self: flex-start; }
-        .chat-input-area { padding: 20px 30px; border-top: 1px solid #f0f2f5; }
-        .input-wrapper { display: flex; gap: 12px; }
-        textarea { flex: 1; height: 50px; padding: 14px; border: 1px solid #ccd4e0; border-radius: 8px; resize: none; outline: none; }
-        button { background-color: #1d56df; color: white; border: none; padding: 0 28px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        button:disabled { background-color: #a0b6ed; }
+        body { font-family: sans-serif; padding: 20px; }
+        .chat-messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; margin-bottom: 10px; padding: 10px; }
+        .message { margin-bottom: 10px; }
     </style>
 </head>
 <body>
-
-    <header>
-        <h1>R & F 株式会社</h1>
-        <p>ONE FOR ALL ALL FOR ONE</p>
-    </header>
-
-    <main>
-        <div class="chat-container">
-            <div class="chat-header"><h2>🤖 AIアシスタント</h2></div>
-            <div class="chat-messages" id="chatMessages">
-                <div class="message bot-message">お疲れ様です！何か困ったことや、社内手続きについて知りたいことはありますか？</div>
-            </div>
-            <div class="chat-input-area">
-                <div class="input-wrapper">
-                    <textarea id="userInput" placeholder="質問を入力してください（Ctrl + Enter で送信）..."></textarea>
-                    <button id="sendBtn" onclick="sendMessage()">送信</button>
-                </div>
-            </div>
-        </div>
-    </main>
+    <div class="chat-messages" id="chatMessages"></div>
+    <textarea id="userInput" placeholder="質問を入力..."></textarea>
+    <button id="sendBtn" onclick="sendMessage()">送信</button>
 
     <script>
-        const userInput = document.getElementById('userInput');
-        const chatMessages = document.getElementById('chatMessages');
-        const sendBtn = document.getElementById('sendBtn');
-
-        userInput.addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.key === 'Enter') {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
         async function sendMessage() {
-            const question = userInput.value.trim();
+            const input = document.getElementById('userInput');
+            const chatMessages = document.getElementById('chatMessages');
+            const question = input.value.trim();
             if (!question) return;
 
-            appendMessage(question, 'user-message');
-            userInput.value = '';
-            sendBtn.disabled = true;
-            sendBtn.innerText = '通信中...';
+            // 顯示用戶訊息
+            chatMessages.innerHTML += `<div class="message"><b>あなた:</b> ${question}</div>`;
+            input.value = '';
 
             try {
-                // 這裡是指向您的 Render API
+                // 核心修正：將請求發送到您的 Render API
                 const response = await fetch('https://rf-ai-system.onrender.com/api/ask', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question: question })
                 });
 
-                if (!response.ok) throw new Error('伺服器錯誤');
-
                 const data = await response.json();
-                appendMessage(data.answer, 'bot-message');
+                chatMessages.innerHTML += `<div class="message"><b>AI:</b> ${data.answer}</div>`;
             } catch (error) {
-                appendMessage('エラー: 接続に失敗しました。', 'error-message');
-                console.error(error);
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.innerText = '送信';
+                chatMessages.innerHTML += `<div class="message" style="color:red;">エラーが発生しました。</div>`;
             }
-        }
-
-        function appendMessage(text, className) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${className}`;
-            messageDiv.textContent = text;
-            chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
     </script>
