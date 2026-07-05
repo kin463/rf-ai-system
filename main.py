@@ -17,16 +17,19 @@ async def get_index():
 
 @app.post("/api/ask")
 async def ask_grok(payload: QueryRequest):
-    # ファイル読み込み
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return {"answer": "システム設定エラー: APIキーが設定されていません。"}
+
+    # ファイル読み込み（デバッグ用）
     base_dir = os.path.dirname(os.path.abspath(__file__))
     full_text = ""
     for filename in ["rules.txt", "rules.txt2"]:
-        if os.path.exists(os.path.join(base_dir, filename)):
-            with open(os.path.join(base_dir, filename), "r", encoding="utf-8") as f:
+        path = os.path.join(base_dir, filename)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
                 full_text += f.read() + "\n"
 
-    # AIへのリクエスト
-    api_key = os.environ.get("GROQ_API_KEY")
     try:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -34,22 +37,19 @@ async def ask_grok(payload: QueryRequest):
             json={
                 "model": "llama-3.1-8b-instant",
                 "messages": [
-                    {
-                        "role": "system", 
-                        "content": (
-                            "あなたはR&F株式会社の社内AI秘書です。\n"
-                            "【重要ルール】\n"
-                            "1. 提出先等の回答は必ず提供されたマニュアルの記述に従うこと（勝手に推測しない）。\n"
-                            "2. 回答は簡潔にすること。同じ内容を繰り返さないこと（ループ禁止）。\n"
-                            "3. 関連情報が見つからない場合は「規定に記載がありません」とだけ答えること。\n"
-                            f"【マニュアル全文】\n{full_text}"
-                        )
-                    },
-                    {"role": "user", "content": payload.question}
+                    {"role": "system", "content": "あなたはR&F社のAIアシスタントです。マニュアルの内容に基づき回答してください。"},
+                    {"role": "user", "content": f"マニュアル内容: {full_text[:2000]}\n\n質問: {payload.question}"}
                 ],
-                "temperature": 0.0 # 創造的な回答を抑える
+                "temperature": 0.0
             }
         )
-        return {"answer": response.json()["choices"][0]["message"]["content"]}
+        
+        # エラー詳細を確認するための処理
+        res_data = response.json()
+        if "choices" in res_data:
+            return {"answer": res_data["choices"][0]["message"]["content"]}
+        else:
+            return {"answer": f"APIレスポンスエラー: {res_data}"}
+            
     except Exception as e:
-        return {"answer": f"エラー: {str(e)}"}
+        return {"answer": f"通信例外エラー: {str(e)}"}
