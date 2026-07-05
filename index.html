@@ -40,7 +40,7 @@
                 body: JSON.stringify({ question: question })
             });
 
-            if (!response.ok) throw new Error('接続エラー');
+            if (!response.ok) throw new Error('通信エラー');
 
             const data = await response.json();
             chatMessages.innerHTML += `<div class="message"><span class="ai">AI:</span> ${data.answer}</div>`;
