@@ -7,13 +7,7 @@ import os
 
 app = FastAPI()
 
-# CORS設定
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 class QueryRequest(BaseModel):
     question: str
@@ -33,7 +27,6 @@ async def ask_grok(payload: QueryRequest):
     api_key = os.environ.get("GROQ_API_KEY")
     
     try:
-        # モデルを軽量な llama-3.1-8b-instant に変更（制限回避のため）
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
@@ -48,7 +41,7 @@ async def ask_grok(payload: QueryRequest):
         )
         
         if response.status_code == 429:
-            return {"answer": "AIが混雑しています。1分ほど待ってから再度送信してください。"}
+            return {"answer": "現在AIが混雑しています。1分ほど待ってから再度送信してください。"}
         
         response.raise_for_status()
         return {"answer": response.json()["choices"][0]["message"]["content"]}
