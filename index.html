@@ -1,45 +1,55 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>R&F社内AIアシスタント</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f8f9fa; }
-        #output { width: 100%; max-width: 700px; height: 400px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; overflow-y: auto; white-space: pre-wrap; background: white; }
-        #input { width: 100%; max-width: 700px; padding: 10px; margin-top: 10px; border-radius: 5px; }
-        button { padding: 10px 20px; margin-top: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <h1>🤖 R&F 社内AIアシスタント</h1>
-    <textarea id="output" readonly placeholder="回答がここに表示されます..."></textarea><br>
-    <textarea id="input" rows="3" placeholder="質問を入力..."></textarea><br>
-    <button onclick="sendQuestion()">送信</button>
+import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import requests
 
-    <script>
-        async function sendQuestion() {
-            const output = document.getElementById('output');
-            const input = document.getElementById('input');
-            const question = input.value.trim();
-            if (!question) return;
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-            output.value += "\n\n--- あなた ---\n" + question;
-            input.value = "";
-            output.scrollTop = output.scrollHeight;
+class QueryRequest(BaseModel):
+    question: str
 
-            try {
-                const response = await fetch('/api/ask', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({question: question})
-                });
-                const data = await response.json();
-                output.value += "\n\n--- AI ---\n" + (data.answer || "回答生成エラー");
-                output.scrollTop = output.scrollHeight;
-            } catch (e) {
-                output.value += "\n\n通信エラーが発生しました。";
+@app.get("/")
+async def get_index():
+    return FileResponse("index.html")
+
+@app.post("/api/ask")
+async def ask_grok(payload: QueryRequest):
+    # ファイル読み込み
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    full_text = ""
+    for filename in ["rules.txt", "rules.txt2"]:
+        if os.path.exists(os.path.join(base_dir, filename)):
+            with open(os.path.join(base_dir, filename), "r", encoding="utf-8") as f:
+                full_text += f.read() + "\n"
+
+    # AIへのリクエスト
+    api_key = os.environ.get("GROQ_API_KEY")
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [
+                    {
+                        "role": "system", 
+                        "content": (
+                            "あなたはR&F株式会社の社内AI秘書です。\n"
+                            "【重要ルール】\n"
+                            "1. 提出先等の回答は必ず提供されたマニュアルの記述に従うこと（勝手に推測しない）。\n"
+                            "2. 回答は簡潔にすること。同じ内容を繰り返さないこと（ループ禁止）。\n"
+                            "3. 関連情報が見つからない場合は「規定に記載がありません」とだけ答えること。\n"
+                            f"【マニュアル全文】\n{full_text}"
+                        )
+                    },
+                    {"role": "user", "content": payload.question}
+                ],
+                "temperature": 0.0 # 創造的な回答を抑える
             }
-        }
-    </script>
-</body>
-</html>
+        )
+        return {"answer": response.json()["choices"][0]["message"]["content"]}
+    except Exception as e:
+        return {"answer": f"エラー: {str(e)}"}
