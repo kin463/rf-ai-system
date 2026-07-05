@@ -2,15 +2,17 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>R&F AIアシスタント</title>
+    <title>R&F 社内AIアシスタント</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        textarea { width: 100%; max-width: 600px; padding: 10px; }
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }
+        #output { width: 100%; max-width: 600px; height: 300px; padding: 10px; background: white; border: 1px solid #ccc; overflow-y: scroll; white-space: pre-wrap; }
+        #input { width: 100%; max-width: 600px; padding: 10px; margin-top: 10px; }
+        button { padding: 10px 20px; margin-top: 10px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
     </style>
 </head>
 <body>
     <h1>🤖 R&F 社内AIアシスタント</h1>
-    <textarea id="output" rows="15" readonly></textarea><br>
+    <textarea id="output" readonly placeholder="AIからの回答がここに表示されます..."></textarea><br>
     <textarea id="input" rows="3" placeholder="質問を入力..."></textarea><br>
     <button onclick="sendQuestion()">送信</button>
 
@@ -21,8 +23,9 @@
             const question = input.value.trim();
             if (!question) return;
 
-            output.value += "\n\nあなた: " + question;
+            output.value += "\n\n--- あなた ---\n" + question;
             input.value = ""; 
+            output.scrollTop = output.scrollHeight;
 
             try {
                 const response = await fetch('/api/ask', {
@@ -31,9 +34,10 @@
                     body: JSON.stringify({question: question})
                 });
                 const data = await response.json();
-                output.value += "\nAI: " + (data.answer || "エラー発生");
+                output.value += "\n\n--- AI ---\n" + (data.answer || "エラーが発生しました");
+                output.scrollTop = output.scrollHeight;
             } catch (e) {
-                output.value += "\nAI: 通信エラーが発生しました。";
+                output.value += "\n\n通信エラーが発生しました。";
             }
         }
     </script>
