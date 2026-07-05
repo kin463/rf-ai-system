@@ -19,11 +19,10 @@
             const output = document.getElementById('output');
             const input = document.getElementById('input');
             const question = input.value.trim();
-            
             if (!question) return;
 
             output.value += "\n\nあなた: " + question;
-            input.value = ""; // 送信後にクリア
+            input.value = ""; 
 
             try {
                 const response = await fetch('/api/ask', {
@@ -32,9 +31,9 @@
                     body: JSON.stringify({question: question})
                 });
                 const data = await response.json();
-                output.value += "\nAI: " + (data.answer || "エラーが発生しました");
+                output.value += "\nAI: " + (data.answer || "エラー発生");
             } catch (e) {
-                output.value += "\nAI: サーバーとの通信に失敗しました。";
+                output.value += "\nAI: 通信エラーが発生しました。";
             }
         }
     </script>
