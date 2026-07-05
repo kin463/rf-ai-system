@@ -27,24 +27,22 @@ async def ask_grok(payload: QueryRequest):
             with open(file_path, "r", encoding="utf-8") as f:
                 full_text += f.read() + "\n"
 
-    # 【検索ロジック】質問内容に応じて重要度を付与
+    # 検索ロジック：質問内容に合わせて抽出箇所を切り替える
     question = payload.question
     lines = full_text.splitlines()
     
-    # キーワードマッチングによる抽出
-    if any(k in question for k in ["帰社日", "大関", "山田"]):
+    if any(k in question for k in ["帰社日", "大関", "山田", "田中"]):
         relevant_lines = [l for l in lines if any(n in l for n in ["帰社", "大関", "山田", "田中"])]
     elif any(k in question for k in ["勉強会", "講師", "テーマ"]):
         relevant_lines = [l for l in lines if any(k in l for k in ["勉強会", "講師", "日時"])]
     elif any(k in question for k in ["議事録", "MTG", "テンプレート"]):
-        relevant_lines = [l for l in lines if any(k in l for k in ["議事録", "概要", "決定事項", "進捗"])]
+        relevant_lines = [l for l in lines if any(k in l for k in ["議事録", "概要", "決定事項", "進捗", "記入担当"])]
     else:
-        # 通常時はマニュアルの重要規定を優先
-        relevant_lines = lines[:200] 
+        relevant_lines = lines # 通常は全体を参照
+    
+    # AI送信サイズ制限（3000文字）
+    context = "\n".join(relevant_lines)[-3000:]
 
-    context = "\n".join(relevant_lines)[-3000:] # サイズ制限を厳守
-
-    # AIへのリクエスト
     api_key = os.environ.get("GROQ_API_KEY")
     try:
         response = requests.post(
@@ -56,10 +54,10 @@ async def ask_grok(payload: QueryRequest):
                     {
                         "role": "system", 
                         "content": (
-                            "あなたはR&Fの社内AI秘書です。\n"
-                            "【ルール】緊急時は現場連絡→LINE WORKS報告を最優先すること。\n"
-                            "【知識源】以下のマニュアル内容に基づき回答してください。\n"
-                            f"{context}"
+                            "あなたはR&F株式会社のAI秘書です。\n"
+                            "【重要】寝坊・体調不良等の緊急時は「現場連絡」→「LINE WORKSで営業担当とリーダーへ報告」を最優先で案内すること。\n"
+                            "議事録の依頼には、提供されたテンプレートを用いて正確に回答してください。\n"
+                            f"【参照データ】\n{context}"
                         )
                     },
                     {"role": "user", "content": question}
