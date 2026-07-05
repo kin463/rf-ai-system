@@ -8,7 +8,6 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# CORS設定
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,69 +18,41 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
 
+# APIキーの読み込み
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_relevant_sections(user_query: str) -> str:
-    """
-    複数のマニュアルファイルを読み込み、関連性の高いセクションを抽出する
-    """
+    """マニュアルから関連する内容を抽出する関数"""
     full_content = ""
-    # rules.txtとrules.txt2の両方を読み込む
+    # rules.txtとrules.txt2を読み込み
     for filename in ["rules.txt", "rules.txt2"]:
         if os.path.exists(filename):
             with open(filename, "r", encoding="utf-8") as f:
                 full_content += f.read() + "\n"
     
-    if not full_content:
-        return ""
+    if not full_content: return "マニュアルデータが見つかりません。"
 
-    # セクション分割
+    # 単純なキーワードマッチング（全一致が難しい場合でもヒットさせる）
     sections = [s.strip() for s in re.split(r'\n\s*\r?\n', full_content) if s.strip()]
+    keywords = user_query.split()
     
-    # クエリキーワード抽出
-    blocks = re.findall(r'[\u4E00-\u9FFF\u30A0-\u30FF_a-zA-Z0-9ーァ-ヶー]+', user_query)
-    scored_sections = []
-
-    for section in sections:
-        score = 0
-        for block in blocks:
-            if block in section: score += 100
-            elif len(block) >= 2 and any(block[i:i+2] in section for i in range(len(block)-1)): score += 40
-        
-        if score > 0:
-            scored_sections.append((score, section))
-            
-    scored_sections.sort(key=lambda x: x[0], reverse=True)
-    
-    # 関連性の高い上位2セクションを結合
-    return "\n\n".join([s[1] for s in scored_sections[:2]])
+    hits = [s for s in sections if any(k in s for k in keywords)]
+    return "\n\n".join(hits[:3]) if hits else full_content[:1500]
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
+    if not GROQ_API_KEY:
+        return {"response": "システムエラー：APIキーが設定されていません。"}
+        
     relevant_manual = get_relevant_sections(request.message)
     
-    if not relevant_manual.strip():
-        # マニュアルにない質問へのデフォルト対応
-        relevant_manual = "社内規定に記載がない事柄については、営業担当またはリーダーにLINE WORKSで確認してください。"
-
-    prompt = f"""あなたはR&F株式会社の社員専用FAQアシスタントです。
-以下の【社内マニュアル】のみを根拠に回答してください。
-
-【回答ガイドライン】
-- 丁寧な日本語（です・ます調）で回答すること。
-- マニュアルの事実をそのまま伝え、勝手な要約はしないこと。
-- 前置きや結びの定型文は最小限にし、結論から答えること。
-
-【社内マニュアル】
-{relevant_manual}
-
-【質問】
-{request.message}
-"""
-
-    if not GROQ_API_KEY:
-        return {"response": "APIキーが設定されていません。"}
-        
+    prompt = f"""あなたはR&F株式会社のAI秘書です。以下のマニュアル情報のみを根拠に回答してください。
+    【マニュアル情報】
+    {relevant_manual}
+    【質問】
+    {request.message}
+    """
+    
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
@@ -93,13 +64,13 @@ async def chat(request: ChatRequest):
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, json=payload, headers=headers)
-            if response.status_code != 200:
-                return {"response": "現在サーバーが混み合っています。少し待ってから再度お試しください。"}
-            
-            result = response.json()
-            return {"response": result["choices"][0]["message"]["content"].strip()}
+            res_json = response.json()
+            if "choices" in res_json:
+                return {"response": res_json["choices"][0]["message"]["content"]}
+            else:
+                return {"response": f"AIエラー: {res_json}"}
     except Exception as e:
-        return {"response": f"通信エラーが発生しました: {str(e)}"}
+        return {"response": f"通信エラー: {str(e)}"}
 
 @app.get("/")
 async def get_index():
