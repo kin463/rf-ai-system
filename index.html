@@ -2,31 +2,35 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>R&F株式会社 社内AIアシスタント</title>
+    <title>AIアシスタント</title>
 </head>
 <body>
     <h1>🤖 AIアシスタント</h1>
     <textarea id="output" rows="10" cols="50" readonly></textarea><br>
-    <textarea id="input" rows="3" cols="50" placeholder="質問を入力してください..."></textarea><br>
+    <textarea id="input" rows="3" cols="50" placeholder="質問を入力..."></textarea><br>
     <button onclick="sendQuestion()">送信</button>
 
     <script>
         async function sendQuestion() {
-            const question = document.getElementById('input').value;
-            const output = document.getElementById('output');
-            
-            output.value += "\nあなた: " + question;
+            const inputEl = document.getElementById('input');
+            const outputEl = document.getElementById('output');
+            const question = inputEl.value;
+
+            outputEl.value += "\nあなた: " + question;
+            inputEl.value = "";
+
             try {
-                // ここで /api/ask を確実に叩く
                 const response = await fetch('/api/ask', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question: question })
                 });
+                
                 const data = await response.json();
-                output.value += "\nAI: " + data.answer;
-            } catch (error) {
-                output.value += "\nエラー: 通信に失敗しました。";
+                // 這裡明確指定存取 answer 屬性
+                outputEl.value += "\nAI: " + (data.answer || "回答を取得できませんでした");
+            } catch (e) {
+                outputEl.value += "\nエラー: 通信失敗";
             }
         }
     </script>
