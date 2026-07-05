@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 # 🔑 Groq APIキー
-GROK_API_KEY = "YOUR_GROQ_API_KEY_HERE"" 
+GROK_API_KEY = os.environ.get("GROQ_API_KEY") 
 
 class QueryRequest(BaseModel):
     question: str
