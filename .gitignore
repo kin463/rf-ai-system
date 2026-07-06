@@ -1,3 +1,11 @@
-__pycache__/
+# 環境変数やAPIキー関連
 .env
-*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Renderや仮想環境関連
+.venv/
+venv/
+env/
+.env.local
