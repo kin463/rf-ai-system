@@ -3,38 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>R&F 社員専用FAQシステム</title>
+    <title>社員専用FAQアシスタント</title>
     <style>
-        /* 整體背景與容器 */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: white; width: 100%; max-width: 500px; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .chat-card { background: white; width: 90%; max-width: 450px; padding: 25px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { font-size: 18px; color: #333; margin-bottom: 20px; text-align: center; }
         
-        /* 標題與說明 */
-        h2 { color: #2d3436; margin-top: 0; text-align: center; }
-        p { color: #636e72; font-size: 14px; text-align: center; margin-bottom: 25px; }
-
-        /* 輸入區域 */
-        textarea { width: 100%; height: 100px; padding: 15px; border: 2px solid #dfe6e9; border-radius: 12px; font-size: 16px; box-sizing: border-box; outline: none; transition: border 0.3s; resize: none; }
-        textarea:focus { border-color: #0984e3; }
-
-        /* 按鈕風格 */
-        button { width: 100%; padding: 14px; background-color: #0984e3; color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: background 0.3s; }
-        button:hover { background-color: #74b9ff; }
-
-        /* 結果顯示區 */
-        #chatBox { margin-top: 25px; padding: 20px; background-color: #f1f2f6; border-radius: 12px; font-size: 15px; color: #2d3436; line-height: 1.6; min-height: 50px; white-space: pre-wrap; border-left: 5px solid #0984e3; }
+        textarea { width: 100%; height: 90px; padding: 12px; border: 1px solid #e0e0e0; border-radius: 12px; font-size: 14px; box-sizing: border-box; resize: none; outline: none; margin-bottom: 10px; }
+        textarea:focus { border-color: #007bff; }
+        
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #0056b3; }
+        
+        #chatBox { margin-top: 20px; padding: 15px; background: #fdfdfd; border: 1px solid #eee; border-radius: 12px; font-size: 14px; color: #555; line-height: 1.5; min-height: 60px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
 
-<div class="card">
+<div class="chat-card">
     <h2>💼 社員専用FAQ</h2>
-    <p>社内規定や緊急時の連絡についてお気軽にご質問ください。</p>
-
-    <textarea id="userInput" placeholder="例：寝坊したらどうする？" onkeydown="handleKeyDown(event)"></textarea>
-    <button onclick="sendQuestion()">質問する</button>
-
-    <div id="chatBox">AIの回答がここに表示されます...</div>
+    <textarea id="userInput" placeholder="質問を入力してください..." onkeydown="handleKeyDown(event)"></textarea>
+    <button onclick="sendQuestion()">送信</button>
+    <div id="chatBox">AIの回答がここに表示されます。</div>
 </div>
 
 <script>
@@ -52,7 +42,7 @@
 
         if (!message.trim()) return;
 
-        chatBox.innerText = "思考中...";
+        chatBox.innerText = "考え中...";
         userInput.value = ""; 
 
         try {
@@ -63,7 +53,7 @@
             });
             const data = await response.json();
             chatBox.innerText = data.response;
-        } catch (error) {
+        } catch (e) {
             chatBox.innerText = "通信エラーが発生しました。";
         }
     }
