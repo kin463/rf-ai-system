@@ -1,5 +1,5 @@
 import os
-import httpx
+import google.generativeai as genai
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -7,6 +7,12 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+# 環境変数から Gemini API キーを取得して設定
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+# フロントエンドとの通信を許可
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,9 +23,8 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-
 def get_all_manuals() -> str:
+    """社内規定ファイル（rules.txt）を読み込む"""
     if os.path.exists("rules.txt"):
         with open("rules.txt", "r", encoding="utf-8") as f:
             return f.read()
@@ -27,31 +32,31 @@ def get_all_manuals() -> str:
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    manual_data = get_all_manuals()
-    prompt = f"【社内マニュアル】\n{manual_data}\n\n質問: {request.message}\n回答してください。"
+    # APIキーがRenderで正しく設定されているかチェック
+    if not GEMINI_API_KEY:
+        return {"response": "システムエラー：RenderのEnvironmentに GEMINI_API_KEY が設定されていません。"}
     
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    payload = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.0
-    }
+    manual_data = get_all_manuals()
+    
+    # AIへの指示（プロンプト）
+    prompt = f"""あなたはR&F株式会社のAIアシスタントです。
+    以下の【社内マニュアル】のみを根拠に回答してください。
+    もしマニュアル内に回答が見当たらない場合は「マニュアルに記載がないため、正確な回答ができません」と答えてください。
+    
+    【社内マニュアル】
+    {manual_data}
+    
+    【質問】
+    {request.message}
+    """
     
     try:
-        # タイムアウトを60秒に設定
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            res_json = response.json()
-            
-            # デバッグ用に構造を確認
-            if "choices" in res_json:
-                return {"response": res_json["choices"][0]["message"]["content"]}
-            else:
-                # 失敗した場合、生の応答を返す
-                return {"response": f"APIエラー: {str(res_json)}"}
+        # 軽くて速い gemini-1.5-flash モデルを使用
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
+        return {"response": response.text}
     except Exception as e:
-        return {"response": f"通信エラーの詳細: {str(e)}"}
+        return {"response": f"Gemini API エラーが発生しました: {str(e)}"}
 
 @app.get("/")
 async def get_index():
