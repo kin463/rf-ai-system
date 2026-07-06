@@ -1,15 +1,11 @@
 import os
-import google.generativeai as genai
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 app = FastAPI()
-
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,28 +17,34 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
 
-def get_all_manuals() -> str:
-    if os.path.exists("rules.txt"):
-        with open("rules.txt", "r", encoding="utf-8") as f:
-            return f.read()
-    return "社内マニュアルが見つかりません。"
+# 確保讀取的是 Render 環境變數
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    if not GEMINI_API_KEY:
-        return {"response": "システムエラー：APIキーが設定されていません。"}
+    if not GROQ_API_KEY:
+        return {"response": "API キーが設定されていません。"}
     
-    manual_data = get_all_manuals()
-    prompt = f"あなたはR&F株式会社のAIアシスタントです。以下の【社内マニュアル】のみを根拠に回答してください。\n\n【社内マニュアル】\n{manual_data}\n\n【質問】\n{request.message}"
+    # 讀取規則
+    manual = ""
+    if os.path.exists("rules.txt"):
+        with open("rules.txt", "r", encoding="utf-8") as f:
+            manual = f.read()
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.1-8b-instant", # 改用較輕量的模型，減少額度消耗
+        "messages": [{"role": "user", "content": f"手冊: {manual}\n\n問題: {request.message}"}]
+    }
     
     try:
-        # gemini-1.5-flash を直接指定します
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
-        return {"response": response.text}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            data = response.json()
+            return {"response": data["choices"][0]["message"]["content"]}
     except Exception as e:
-        # エラーの内容を詳細に表示
-        return {"response": f"Gemini API エラー: {type(e).__name__} - {str(e)}"}
+        return {"response": f"エラー: {str(e)}"}
 
 @app.get("/")
 async def get_index():
