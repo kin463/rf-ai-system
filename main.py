@@ -36,17 +36,13 @@ async def chat(request: ChatRequest):
     prompt = f"あなたはR&F株式会社のAIアシスタントです。以下の【社内マニュアル】のみを根拠に回答してください。\n\n【社内マニュアル】\n{manual_data}\n\n【質問】\n{request.message}"
     
     try:
-        # 現在利用可能なモデルをリストアップし、その中から最初の一つを使用する
-        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_methods]
-        if not models:
-            return {"response": "エラー：利用可能なモデルが見つかりません。"}
-        
-        # 取得したモデル名（例: 'models/gemini-1.5-flash-latest' など）を使って生成
-        model = genai.GenerativeModel(models[0])
+        # gemini-1.5-flash を直接指定します
+        model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt)
         return {"response": response.text}
     except Exception as e:
-        return {"response": f"Gemini API エラー詳細: {str(e)}"}
+        # エラーの内容を詳細に表示
+        return {"response": f"Gemini API エラー: {type(e).__name__} - {str(e)}"}
 
 @app.get("/")
 async def get_index():
