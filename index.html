@@ -35,13 +35,17 @@
             output.scrollTop = output.scrollHeight;
 
             try {
-                const response = await fetch('/api/ask', {
+                // 修正箇所: エンドポイントを /api/chat に変更し、messageキーで送信
+                const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({question: question})
+                    body: JSON.stringify({message: question})
                 });
+                
                 const data = await response.json();
-                output.value += "\n\n--- AI ---\n" + (data.answer || "回答が生成されませんでした。");
+                
+                // 修正箇所: 戻り値キーを data.response に変更
+                output.value += "\n\n--- AI ---\n" + (data.response || "回答が生成されませんでした。");
                 output.scrollTop = output.scrollHeight;
             } catch (e) {
                 output.value += "\n\n通信エラーが発生しました。";
