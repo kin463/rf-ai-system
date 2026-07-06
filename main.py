@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# 環境変数から Gemini API キーを取得
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -34,24 +33,19 @@ async def chat(request: ChatRequest):
         return {"response": "システムエラー：APIキーが設定されていません。"}
     
     manual_data = get_all_manuals()
-    prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    以下の【社内マニュアル】のみを根拠に回答してください。
-    マニュアルに記載がない場合は「マニュアルに記載がないため、回答できません」と答えてください。
-    
-    【社内マニュアル】
-    {manual_data}
-    
-    【質問】
-    {request.message}
-    """
+    prompt = f"あなたはR&F株式会社のAIアシスタントです。以下の【社内マニュアル】のみを根拠に回答してください。\n\n【社内マニュアル】\n{manual_data}\n\n【質問】\n{request.message}"
     
     try:
-        # モデル名に 'models/' を明示的に付与して呼び出しを試みる
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        # 現在利用可能なモデルをリストアップし、その中から最初の一つを使用する
+        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_methods]
+        if not models:
+            return {"response": "エラー：利用可能なモデルが見つかりません。"}
+        
+        # 取得したモデル名（例: 'models/gemini-1.5-flash-latest' など）を使って生成
+        model = genai.GenerativeModel(models[0])
         response = model.generate_content(prompt)
         return {"response": response.text}
     except Exception as e:
-        # エラー詳細を返す（これでなぜダメなのかが判明します）
         return {"response": f"Gemini API エラー詳細: {str(e)}"}
 
 @app.get("/")
