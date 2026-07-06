@@ -60,7 +60,7 @@ async def chat(request: ChatRequest):
     }
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(url, json=payload, headers=headers)
             res_json = response.json()
             if "choices" in res_json:
