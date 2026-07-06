@@ -1,4 +1,7 @@
-fastapi
-uvicorn
-httpx
-pydantic
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+Flask-SocketIO==5.3.4
+python-socketio==5.9.0
+python-engineio==4.4.0
+requests==2.31.0
+Werkzeug==2.3.7
