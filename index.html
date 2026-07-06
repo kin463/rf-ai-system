@@ -21,7 +21,8 @@
     <h2>💼 R&F 社員専用アシスタント</h2>
     <p class="description">勤怠ルール、帰社日、資格手当など何でも質問してください。</p>
 
-    <textarea id="userInput" placeholder="例：寝坊した時はどうする？ 大関さんの帰社日はいつ？"></textarea>
+    <!-- Enterキー送信のためのイベント設定を追加 -->
+    <textarea id="userInput" placeholder="例：寝坊した時はどうする？ 大関さんの帰社日はいつ？" onkeydown="handleKeyDown(event)"></textarea>
     <button onclick="sendQuestion()">質問を送信</button>
 
     <h3>🤖 回答:</h3>
@@ -29,19 +30,26 @@
 </div>
 
 <script>
+    // Enterキーを押した時の処理
+    function handleKeyDown(event) {
+        // Ctrl + Enter または Enter だけで送信（好みに合わせて変更可能）
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault(); // 改行の入力を防ぐ
+            sendQuestion();
+        }
+    }
+
     async function sendQuestion() {
-        const message = document.getElementById("userInput").value;
+        const userInput = document.getElementById("userInput");
+        const message = userInput.value;
         const chatBox = document.getElementById("chatBox");
 
-        if (!message.trim()) {
-            alert("質問を入力してください。");
-            return;
-        }
+        if (!message.trim()) return;
 
         chatBox.innerText = "🔍 規定を確認・思考中...";
+        userInput.value = ""; // 送信後にクリア
 
         try {
-            // 統合された main.py の /api/chat エンドポイントを叩く
             const response = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
