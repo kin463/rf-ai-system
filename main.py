@@ -20,13 +20,11 @@ class ChatRequest(BaseModel):
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_all_manuals() -> str:
-    """全マニュアルを読み込む"""
-    full_content = ""
-    for filename in ["rules.txt", "rules.txt2"]:
-        if os.path.exists(filename):
-            with open(filename, "r", encoding="utf-8") as f:
-                full_content += f.read() + "\n"
-    return full_content if full_content else "マニュアルデータが見つかりません。"
+    # 這裡確保讀取的是 rules.txt
+    if os.path.exists("rules.txt"):
+        with open("rules.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    return "社内マニュアルが見つかりません。"
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
@@ -35,13 +33,14 @@ async def chat(request: ChatRequest):
         
     manual_data = get_all_manuals()
     
-    prompt = f"""あなたはR&F株式会社の厳格なAI秘書です。
+    # 嚴格要求 AI 依據手冊回答
+    prompt = f"""あなたはR&F株式会社のAIアシスタントです。
     以下の【社内マニュアル】のみを根拠に回答してください。
-    記載がない場合は「マニュアルに記載がないため回答できません。総務部へ確認してください」と答えてください。
+    記載がない場合は「マニュアルに記載がないため回答できません」と答えてください。
     
     【社内マニュアル】
     {manual_data}
-
+    
     【質問】
     {request.message}
     """
@@ -50,25 +49,17 @@ async def chat(request: ChatRequest):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": "正確で安全な社内AIアシスタントです。"},
-            {"role": "user", "content": prompt}
-        ],
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.0
     }
     
     try:
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(url, json=payload, headers=headers)
             res_json = response.json()
-            if "choices" in res_json:
-                return {"response": res_json["choices"][0]["message"]["content"]}
-            else:
-                return {"response": "AIからの応答生成に失敗しました。"}
-    except httpx.ReadTimeout:
-        return {"response": "回答の生成に時間がかかりすぎています。もう一度送信してください。"}
+            return {"response": res_json["choices"][0]["message"]["content"]}
     except Exception as e:
-        return {"response": f"エラーが発生しました: {str(e)}"}
+        return {"response": f"通信エラーが発生しました: {str(e)}"}
 
 @app.get("/")
 async def get_index():
