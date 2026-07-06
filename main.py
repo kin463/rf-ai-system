@@ -20,7 +20,6 @@ class ChatRequest(BaseModel):
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_all_manuals() -> str:
-    # 這裡確保讀取的是 rules.txt
     if os.path.exists("rules.txt"):
         with open("rules.txt", "r", encoding="utf-8") as f:
             return f.read()
@@ -29,11 +28,10 @@ def get_all_manuals() -> str:
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     if not GROQ_API_KEY:
-        return {"response": "システムエラー：APIキーが設定されていません。"}
+        return {"response": "システムエラー：APIキーが設定されていません。RenderのEnvironment設定を確認してください。"}
         
     manual_data = get_all_manuals()
     
-    # 嚴格要求 AI 依據手冊回答
     prompt = f"""あなたはR&F株式会社のAIアシスタントです。
     以下の【社内マニュアル】のみを根拠に回答してください。
     記載がない場合は「マニュアルに記載がないため回答できません」と答えてください。
@@ -57,9 +55,15 @@ async def chat(request: ChatRequest):
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(url, json=payload, headers=headers)
             res_json = response.json()
-            return {"response": res_json["choices"][0]["message"]["content"]}
+            
+            # デバッグ用：エラー内容を詳細に返す
+            if "choices" in res_json:
+                return {"response": res_json["choices"][0]["message"]["content"]}
+            else:
+                return {"response": f"APIエラーが発生しました。詳細: {str(res_json)}"}
+                
     except Exception as e:
-        return {"response": f"通信エラーが発生しました: {str(e)}"}
+        return {"response": f"通信エラーの詳細: {str(e)}"}
 
 @app.get("/")
 async def get_index():
