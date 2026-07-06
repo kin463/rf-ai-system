@@ -2,39 +2,60 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>R&F AIアシスタント</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R&F株式会社 社員専用FAQシステム</title>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; margin: 0; }
-        header { width: 100%; background: #007bff; color: white; padding: 20px; text-align: center; }
-        .container { width: 90%; max-width: 600px; background: white; padding: 20px; margin-top: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        #output { width: 100%; height: 300px; border: none; background: #f9f9f9; padding: 10px; overflow-y: scroll; white-space: pre-wrap; margin-bottom: 10px; border-radius: 5px; }
-        .input-box { display: flex; gap: 5px; }
-        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { color: #333; text-align: center; }
+        .description { font-size: 14px; color: #666; margin-bottom: 20px; text-align: center; }
+        textarea { width: 100%; height: 120px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 15px; resize: none; }
+        button { width: 100%; padding: 12px; margin-top: 15px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+        button:hover { background-color: #0056b3; }
+        #chatBox { margin-top: 25px; padding: 20px; border-radius: 8px; background-color: #e9ecef; min-height: 100px; white-space: pre-wrap; font-size: 15px; color: #333; line-height: 1.6; }
     </style>
 </head>
 <body>
-    <header><h1>R&F 株式会社</h1></header>
-    <div class="container">
-        <textarea id="output" readonly placeholder="質問を入力してください..."></textarea>
-        <div class="input-box">
-            <input type="text" id="input" placeholder="質問を入力...">
-            <button onclick="send()">送信</button>
-        </div>
-    </div>
-    <script>
-        async function send() {
-            let input = document.getElementById('input');
-            let output = document.getElementById('output');
-            let q = input.value;
-            if(!q) return;
-            output.value += "\n\nあなた: " + q;
-            input.value = "";
-            let res = await fetch('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: q})});
-            let data = await res.json();
-            output.value += "\n\nAI: " + data.response;
-            output.scrollTop = output.scrollHeight;
+
+<div class="container">
+    <h2>💼 R&F 社員専用アシスタント</h2>
+    <p class="description">勤怠ルール、帰社日、資格手当など何でも質問してください。</p>
+
+    <textarea id="userInput" placeholder="例：寝坊した時はどうする？ 大関さんの帰社日はいつ？"></textarea>
+    <button onclick="sendQuestion()">質問を送信</button>
+
+    <h3>🤖 回答:</h3>
+    <div id="chatBox">ここに回答が表示されます。</div>
+</div>
+
+<script>
+    async function sendQuestion() {
+        const message = document.getElementById("userInput").value;
+        const chatBox = document.getElementById("chatBox");
+
+        if (!message.trim()) {
+            alert("質問を入力してください。");
+            return;
         }
-    </script>
+
+        chatBox.innerText = "🔍 規定を確認・思考中...";
+
+        try {
+            // 統合された main.py の /api/chat エンドポイントを叩く
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: message })
+            });
+
+            const data = await response.json();
+            chatBox.innerText = data.response;
+        } catch (error) {
+            chatBox.innerText = "エラーが発生しました。時間を置いて再度お試しください。";
+            console.error(error);
+        }
+    }
+</script>
+
 </body>
 </html>
