@@ -27,21 +27,8 @@ def get_all_manuals() -> str:
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    if not GROQ_API_KEY:
-        return {"response": "システムエラー：APIキーが設定されていません。RenderのEnvironment設定を確認してください。"}
-        
     manual_data = get_all_manuals()
-    
-    prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    以下の【社内マニュアル】のみを根拠に回答してください。
-    記載がない場合は「マニュアルに記載がないため回答できません」と答えてください。
-    
-    【社内マニュアル】
-    {manual_data}
-    
-    【質問】
-    {request.message}
-    """
+    prompt = f"【社内マニュアル】\n{manual_data}\n\n質問: {request.message}\n回答してください。"
     
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
@@ -52,16 +39,17 @@ async def chat(request: ChatRequest):
     }
     
     try:
+        # タイムアウトを60秒に設定
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(url, json=payload, headers=headers)
             res_json = response.json()
             
-            # デバッグ用：エラー内容を詳細に返す
+            # デバッグ用に構造を確認
             if "choices" in res_json:
                 return {"response": res_json["choices"][0]["message"]["content"]}
             else:
-                return {"response": f"APIエラーが発生しました。詳細: {str(res_json)}"}
-                
+                # 失敗した場合、生の応答を返す
+                return {"response": f"APIエラー: {str(res_json)}"}
     except Exception as e:
         return {"response": f"通信エラーの詳細: {str(e)}"}
 
