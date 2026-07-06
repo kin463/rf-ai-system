@@ -52,7 +52,7 @@ async def chat(request: ChatRequest):
     
     try:
         # 軽くて速い gemini-1.5-flash モデルを使用
-        model = genai.GenerativeModel('gemini-1.5-pro')
+        model = genai.GenerativeModel('gemini-pro')
         response = model.generate_content(prompt)
         return {"response": response.text}
     except Exception as e:
