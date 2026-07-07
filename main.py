@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+# CORS設定（ブラウザからのリクエストを許可）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,59 +20,59 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
 
+# APIキーの取得
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_all_manual_content():
-    """ディレクトリ内の全ての.txtファイルを読み込み、結合して返す"""
+    """ディレクトリ内の全ての.txtファイルを統合して読み込む"""
     combined_text = ""
     for file_path in glob.glob("*.txt"):
         with open(file_path, "r", encoding="utf-8") as f:
             combined_text += f.read() + "\n\n"
     return combined_text
 
-def get_relevant_sections(user_query: str, all_text: str, max_sections: int = 3) -> str:
-    """質問に関連する段落をスコアリングして抽出する"""
-    # 段落（空行区切り）で分割
+def get_relevant_sections(user_query: str, all_text: str) -> str:
+    """質問に関連する段落を抽出し、AIに渡すコンテキストを作成する"""
     sections = [s.strip() for s in re.split(r'\n\s*\r?\n', all_text) if s.strip()]
-    
-    # 質問文の主要な文字（2文字以上の単語）を抽出
-    keywords = [user_query[i:i+2] for i in range(len(user_query)-1)]
     
     scored_sections = []
     for section in sections:
-        score = sum(1 for kw in keywords if kw in section)
+        score = 0
+        # 人名検索とキーワード検索のスコアリング
+        if any(name in section for name in ["大関", "中山", "陶山", "麻生", "宮田", "川田", "稲森", "中元", "山田", "石井", "牛澤", "戸ヶ崎", "神林", "村越", "寺岡", "山口", "泉谷", "小栗", "山下", "濱田", "金", "山崎", "宮崎", "福島", "藤岡", "竹本", "矢野", "立原", "茶円", "渡", "山本", "小林", "高橋", "神吉", "河村"]):
+            if any(name in user_query for name in ["大関", "中山", "陶山", "麻生", "宮田", "川田", "稲森", "中元", "山田", "石井", "牛澤", "戸ヶ崎", "神林", "村越", "寺岡", "山口", "泉谷", "小栗", "山下", "濱田", "金", "山崎", "宮崎", "福島", "藤岡", "竹本", "矢野", "立原", "茶円", "渡", "山本", "小林", "高橋", "神吉", "河村"]):
+                score += 500
+        
+        # 一般キーワードのスコア加算
+        keywords = ["帰社日", "連絡", "寝坊", "遅刻", "勤怠", "有給", "チーム", "勉強会"]
+        for kw in keywords:
+            if kw in user_query and kw in section:
+                score += 100
+        
         if score > 0:
             scored_sections.append((score, section))
             
-    # スコアが高い順にソート
     scored_sections.sort(key=lambda x: x[0], reverse=True)
-    
-    # 上位を結合して返す
-    top_sections = [s[1] for s in scored_sections[:max_sections]]
-    return "\n\n".join(top_sections)
+    return "\n\n".join([s[1] for s in scored_sections[:3]])
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     if not GROQ_API_KEY:
         return {"response": "システムエラー：APIキーが設定されていません。"}
     
-    # 全マニュアル（manual_shain.txt + rules.txt）を読み込み
+    # 知識ベースの読み込みと検索
     full_content = get_all_manual_content()
-    
-    # 関連セクションを抽出
     relevant_context = get_relevant_sections(request.message, full_content)
-    
-    # 関連情報がなければ冒頭部分を渡す（セーフガード）
     context_text = relevant_context if relevant_context else full_content[:1500]
     
-    prompt = f"""あなたはR&F株式会社の社員専用FAQアシスタントです。
-以下の【社内資料】に基づいて、質問に日本語で回答してください。
-マニュアル内の事実を優先し、知らないことは「マニュアルに記載がないため回答できません」と答えてください。
+    prompt = f"""あなたはR&F株式会社の社員専用AIアシスタントです。
+以下の【社内資料】のみを根拠にして、質問に丁寧な日本語で回答してください。
+資料に記載がない場合は「マニュアルに記載がないため回答できません」と正直に伝えてください。
 
 【社内資料】
 {context_text}
 
-【質問】
+【ユーザーの質問】
 {request.message}
 """
     
@@ -82,14 +83,14 @@ async def chat(request: ChatRequest):
         "temperature": 0.0
     }
     
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
             response = await client.post(url, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"})
             data = response.json()
             return {"response": data["choices"][0]["message"]["content"]}
-    except Exception as e:
-        return {"response": f"通信エラーが発生しました: {str(e)}"}
+        except Exception as e:
+            return {"response": f"通信エラーが発生しました: {str(e)}"}
 
 @app.get("/")
-async def get_homepage():
+async def get_index():
     return FileResponse("index.html")
