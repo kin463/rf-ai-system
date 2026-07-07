@@ -8,11 +8,9 @@ import re
 
 app = FastAPI()
 
-# CORSの設定
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
-    allow_credentials=False,  
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -22,10 +20,10 @@ class ChatRequest(BaseModel):
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
-def get_relevant_sections(user_query: str, filepath: str, max_sections: int = 4) -> str:
+def get_relevant_sections(user_query: str, filepath: str) -> str:
     """
-    rules.txt から関連セクションを抽出します。
-    組織構成や勉強会などのデータにも対応するため、max_sectionsを少し広げています。
+    ルールファイルを読み込み、質問に関連するセクションを網羅的に抽出します。
+    ファイル構成を変えずに最大限情報を拾うために、検索範囲を拡大しました。
     """
     if not os.path.exists(filepath):
         return ""
@@ -33,66 +31,54 @@ def get_relevant_sections(user_query: str, filepath: str, max_sections: int = 4)
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
-    except Exception as e:
+    except Exception:
         return ""
     
-    # セクション分割（組織データなどは[見出し]で分かれていると想定）
-    # 空行または[で始まる行を区切りとする
-    sections = re.split(r'\n(?=\[)', content)
-    
-    # クエリの重要単語抽出
-    blocks = re.findall(r'[\u4E00-\u9FFF\u30A0-\u30FF_a-zA-Z0-9ー]+', user_query)
+    # ファイル全体を段落単位で分割
+    sections = [s.strip() for s in content.split('\n\n') if s.strip()]
     
     scored_sections = []
+    # 検索キーワードを広げ、ヒット率を向上
     for section in sections:
         score = 0
-        for block in blocks:
-            if block in section:
-                score += 100
+        # 人名、キーワードが少しでも含まれていれば加点
+        if any(name in user_query for name in ["大関", "中山", "竹本", "山下", "山田", "石井"]): score += 100
+        if any(kw in user_query for kw in ["所属", "課", "帰社日", "勉強会", "手当", "有給", "欠勤", "提出"]): score += 100
+        if any(kw in user_query for kw in ["結婚", "死亡", "災害", "資格"]): score += 100
         
-        # 特定キーワードのブースト（組織、帰社日、勉強会）
-        if "帰社日" in user_query and "帰社日" in section: score += 150
-        if "勉強会" in user_query and "勉強会" in section: score += 150
-        if "所属" in user_query or any(name in user_query for name in ["課", "メンバー"]): score += 100
-            
+        # 該当セクションをリスト化
         if score > 0:
-            scored_sections.append((score, section))
+            scored_sections.append(section)
             
-    scored_sections.sort(key=lambda x: x[0], reverse=True)
-    
-    # 上位セクションを結合
-    top_sections = [s[1] for s in scored_sections[:max_sections]]
-    return "\n\n".join(top_sections)
+    # ヒットしたセクションをすべて結合（情報の欠落を防ぐ）
+    return "\n\n".join(scored_sections if scored_sections else sections[:10])
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     user_message = request.message
+    relevant_manual = get_relevant_sections(user_message, "rules.txt")
     
-    # rules.txt を検索対象に変更
-    relevant_manual = get_relevant_sections(user_message, "rules.txt", max_sections=4)
-    
-    if not relevant_manual.strip():
-        return {"response": "マニュアルに記載がないため、会社へ直接お問い合わせください。"}
+    # 強化されたプロンプト：資料を統合的に読み解く指示
+    prompt = f"""あなたはR&F株式会社の専門AIアシスタントです。
+    提供された【社内ルール資料】の内容を統合し、ユーザーの質問に正確に回答してください。
 
-    prompt = f"""あなたは社員専用のFAQアシスタントです。提供された【社内ルール資料】のみを元に回答してください。
+    【重要事項】
+    1. ユーザーが社員名（例：竹本伊吹）を聞いた場合、資料内の「組織構成」セクションを読み解き回答してください。
+    2. 制度（例：資格手当）について聞かれた場合、詳細な数値や条件を資料から抽出してください。
+    3. 資料に情報が断片的に存在する場合でも、文脈を整理して論理的に説明してください。
+    4. 質問に関連する情報がない場合は「記載がありません」と報告してください。
 
-【回答のガイドライン】
-1. 組織構成、帰社日、勉強会、各種規定について正確に答えてください。
-2. 不要な前置きはせず、事実を簡潔に伝えてください。
-3. 資格手当や休暇ルールは、資料の数値を正確に参照してください。
+    【社内ルール資料】
+    {relevant_manual}
 
-【社内ルール資料】
-{relevant_manual}
-
-【ユーザーの質問】
-{user_message}
-"""
+    【ユーザーの質問】
+    {user_message}
+    """
 
     if not GROQ_API_KEY:
         return {"response": "APIキーが設定されていません。"}
         
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": "llama-3.1-8b-instant",
         "messages": [{"role": "user", "content": prompt}],
@@ -100,12 +86,13 @@ async def chat(request: ChatRequest):
     }
     
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        if response.status_code == 200:
-            text = response.json()["choices"][0]["message"]["content"]
-            return {"response": text.strip()}
-        return {"response": "通信エラーが発生しました。"}
+        try:
+            res = await client.post(url, json=payload, headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"})
+            text = res.json()["choices"][0]["message"]["content"]
+            return {"response": text}
+        except Exception as e:
+            return {"response": f"通信エラーが発生しました: {str(e)}"}
 
 @app.get("/")
-async def get_homepage():
+async def get_index():
     return FileResponse("index.html")
