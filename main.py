@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+# CORS設定：あらゆるオリジンからのリクエストを許可
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,9 +20,11 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
 
+# APIキーの取得
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_all_manual_content():
+    """すべてのテキストファイルを読み込み統合する"""
     combined_text = ""
     for file_path in glob.glob("*.txt"):
         with open(file_path, "r", encoding="utf-8") as f:
@@ -29,36 +32,27 @@ def get_all_manual_content():
     return combined_text
 
 def get_relevant_sections(user_query: str, all_text: str) -> str:
+    """検索機能：重複を排除し、質問に関連するセクションを抽出する"""
     # 改行でセクションを分割し、ユニークなリストを作成
     raw_sections = [s.strip() for s in re.split(r'\n\s*\n', all_text) if s.strip()]
     unique_sections = list(set(raw_sections))
     
     scored_sections = []
-    # 社員名リスト（フルネームで定義）
-    names = [
-        "大関颯人", "中山大揮", "陶山誠仁", "麻生成彦", "宮田琉生", "川田一喜", "稲森功士郎", "中元蘭", "山田大暉",
-        "石井純一", "牛澤真美", "戸ヶ崎愛美", "神林裕和", "村越史夫", "寺岡健", "山口聖子",
-        "山田京右", "泉谷優馬", "山口晃広", "小栗泰雅", "山下光輝", "濱田一輝", "金智賢",
-        "山崎百夏", "宮崎亜衣里", "福島怜奈", "藤岡佳純", "竹本伊吹", "矢野誉大", "立原美柚", "茶円康汰",
-        "渡ちなみ", "山本光希", "小林琴子", "高橋明里", "神吉沙弥", "河村梨香"
-    ]
-    
     for section in unique_sections:
         score = 0
+        # 質問に含まれるキーワードに基づいたスコアリング
         keywords = ["帰社日", "有給", "休暇", "手当", "提出", "連絡", "欠勤", "賞与"]
         if any(kw in user_query for kw in keywords):
             score += 10
-            
-        # 質問文の中にリストのいずれかの名前が含まれているかチェック
-        # (苗字のみの場合でも、リスト内の名前の一部としてマッチするように考慮)
-        for name in names:
-            if name in user_query or (len(name) > 2 and name[:2] in user_query):
-                score += 50
-                break
+        # 社員名によるスコアリング強化
+        names = ["大関", "中山", "石井", "渡", "山田", "山崎", "陶山", "麻生", "宮田", "川田", "稲森", "中元"]
+        if any(name in user_query for name in names):
+            score += 50
         
         if score > 0:
             scored_sections.append((score, section))
             
+    # スコアが高い順にソートし、上位5件を抽出
     scored_sections.sort(key=lambda x: x[0], reverse=True)
     return "\n\n".join([s[1] for s in scored_sections[:5]]) if scored_sections else all_text[:2000]
 
@@ -69,6 +63,7 @@ async def chat(request: ChatRequest):
     
     context = get_relevant_sections(request.message, get_all_manual_content())
     
+    # 日本語プロンプト
     prompt = f"""あなたはR&F株式会社のAIアシスタントです。以下の【社内資料】の内容に基づき、正確かつ簡潔に回答してください。
 
     【制約事項】
