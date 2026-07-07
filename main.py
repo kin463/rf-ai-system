@@ -22,6 +22,7 @@ class ChatRequest(BaseModel):
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_all_manual_content():
+    """全テキストファイルを統合"""
     combined_text = ""
     for file_path in glob.glob("*.txt"):
         with open(file_path, "r", encoding="utf-8") as f:
@@ -29,41 +30,41 @@ def get_all_manual_content():
     return combined_text
 
 def get_relevant_sections(user_query: str, all_text: str) -> str:
-    # 帰社日や人名検索に強いロジック
-    sections = re.split(r'(\[RandF .*?\])', all_text)
+    """検索ロジック：人名、課名、規定内容を動的に抽出"""
+    # 帰社日スケジュールと規定本文を個別に扱う
+    sections = re.split(r'\n(?=\[RandF|\n\()', all_text)
     
     scored_sections = []
-    # 質問に関連する名前やキーワードを抽出
-    for i in range(1, len(sections), 2):
-        header = sections[i]
-        content = sections[i+1]
+    for section in sections:
         score = 0
+        # 質問文中のキーワードをスコアリング
+        if any(kw in user_query for kw in section):
+            score += 100
+        # 帰社日や人名が含まれる場合は加点
+        if any(name in user_query for name in ["大関", "中山", "石井", "渡", "山田", "山崎"]):
+            if any(name in section for name in ["大関", "中山", "石井", "渡", "山田", "山崎"]):
+                score += 500
         
-        if any(kw in user_query for kw in header + content):
-            score += 1000
-        if "帰社日" in user_query and "帰社日" in content:
-            score += 500
-            
         if score > 0:
-            scored_sections.append(header + content)
+            scored_sections.append((score, section))
             
-    return "\n".join(scored_sections) if scored_sections else all_text[:2000]
+    scored_sections.sort(key=lambda x: x[0], reverse=True)
+    # 上位3セクションをコンテキストとして返す
+    return "\n\n".join([s[1] for s in scored_sections[:3]]) if scored_sections else all_text[:2000]
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    if not GROQ_API_KEY:
-        return {"response": "システムエラー：APIキーが設定されていません。"}
-    
     context = get_relevant_sections(request.message, get_all_manual_content())
     
-    prompt = f"""あなたはR&F株式会社のAIアシスタントです。以下の【社内資料】に基づいて正確に回答してください。
+    prompt = f"""あなたはR&F株式会社のAIアシスタントです。以下の資料に基づき正確に回答してください。
+    社員情報の検索や帰社日の案内、有給や見舞金の規定など、全ての質問に対応します。
     
-【社内資料】
-{context}
-
-【質問】
-{request.message}
-"""
+    【資料】
+    {context}
+    
+    【質問】
+    {request.message}
+    """
     
     url = "https://api.groq.com/openai/v1/chat/completions"
     payload = {
