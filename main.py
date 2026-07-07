@@ -24,11 +24,12 @@ def get_best_section(user_query: str, filepath: str) -> str:
     except: return "資料読み込みエラー"
     
     sections = re.split(r'\n(?=\[)', content)
-    best_section = sections[0]  # デフォルト
-    max_score = 0
     
-    # 質問に関連するセクションを特定
+    # スコアリング：キーワードの出現回数で関連度を判定
+    best_section = sections[0]
+    max_score = 0
     for section in sections:
+        # クエリ内の名詞を1つずつ検索してスコア加算
         score = sum(1 for kw in user_query if kw in section)
         if score > max_score:
             max_score = score
@@ -37,13 +38,23 @@ def get_best_section(user_query: str, filepath: str) -> str:
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    relevant_section = get_best_section(request.message, "rules.txt")
+    user_message = request.message
+    relevant_section = get_best_section(user_message, "rules.txt")
     
-    prompt = f"""あなたはR&F株式会社のAIアシスタントです。以下の資料に基づき簡潔に回答してください。
-    【資料】
+    # ユーザーの質問意図を正確に捉え、捏造や無関係な回答を防ぐプロンプト
+    prompt = f"""あなたはR&F株式会社の専門AIアシスタントです。
+    以下の【社内ルール資料】のみを使用して、ユーザーの質問にピンポイントで回答してください。
+
+    【回答のルール】
+    1. 質問と無関係な内容（休暇のルール等）は一切含めないでください。
+    2. 資料内に質問された名称（例：「就労手当」）がない場合、類似した制度（例：「各種手当」、「基本給」など）を探し、「〇〇という項目はありますが、その名称の規定はありません」と正直に伝えてください。
+    3. 資料に答えがない場合は「記載がありません」と回答してください。
+
+    【社内ルール資料】
     {relevant_section}
-    【質問】
-    {request.message}
+
+    【ユーザーの質問】
+    {user_message}
     """
 
     payload = {
@@ -64,7 +75,7 @@ async def chat(request: ChatRequest):
             data = res.json()
             return {"response": data["choices"][0]["message"]["content"]}
         except Exception as e:
-            return {"response": "通信エラーが発生しました。"}
+            return {"response": "通信エラーが発生しました。時間を置いて再度お試しください。"}
 
 @app.get("/")
 async def get_index():
