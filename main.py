@@ -16,7 +16,8 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_employee_info(query: str, filepath: str) -> str:
     """
-    資料データベースから、質問に含まれる名前の行を柔軟に抽出する関数
+    資料データベースから、質問に関連する社員情報の行を抽出する関数
+    正規表現を使用して、資料内の [名前] を正確に特定します。
     """
     if not os.path.exists(filepath): return ""
     with open(filepath, "r", encoding="utf-8") as f:
@@ -27,29 +28,31 @@ def get_employee_info(query: str, filepath: str) -> str:
         match = re.search(r'\[(.*?)\]', line)
         if match:
             employee_name = match.group(1)
-            # ★ここが重要：完全一致ではなく、ユーザーの質問文にその名前が含まれていればOKとする
+            # ユーザーの質問文の中に、資料内の社員名（例：「山下光輝」）が含まれていれば
+            # 「山下光輝次」のような入力でも正しくヒットさせる
             if employee_name in query:
                 return line
     return ""
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # 「一覧」が含まれる場合は全資料を返す
+    # 「一覧」という単語が含まれていれば、全資料をコンテキストとして渡す
     if "一覧" in request.message:
         with open("rules.txt", "r", encoding="utf-8") as f:
             context = f.read()
     else:
-        # 社員名検索を実行
+        # 特定社員の情報を検索
         context = get_employee_info(request.message, "rules.txt")
-        # ヒットしなかった場合
+        # 検索結果が空の場合、AIに伝える
         if not context:
-            return {"response": "該当する社員情報が見つかりません。お名前を正しく入力してください。"}
+            return {"response": "該当する社員情報が見つかりません。お名前を確認してください。"}
     
+    # AIへの指示プロンプト
     prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    以下の情報を元に、帰社日や休暇ルールについて回答してください。
-    情報が足りない場合は「該当の情報がありません」と伝えてください。
+    提供された【資料】に基づき、ユーザーの質問に正確に答えてください。
+    情報がない場合は「記載がありません」と回答してください。
 
-    【参照資料】
+    【資料】
     {context}
 
     【質問】
@@ -70,9 +73,9 @@ async def chat(request: ChatRequest):
             data = res.json()
             if "choices" in data:
                 return {"response": data["choices"][0]["message"]["content"]}
-            return {"response": "回答を生成できませんでした。"}
-        except Exception:
-            return {"response": "通信エラーが発生しました。もう一度送信してください。"}
+            return {"response": "回答の生成に失敗しました。"}
+        except Exception as e:
+            return {"response": f"通信エラーが発生しました: {str(e)}"}
 
 @app.get("/")
 async def get_index():
