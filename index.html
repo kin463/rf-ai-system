@@ -17,7 +17,7 @@
 <body>
 
     <div class="header-area">
-        <h2 id="title">よくある質問</h2>
+        <h2 id="title">勤怠検索</h2>
         <button class="toggle-btn" id="mode-toggle" onclick="toggleMode()">帰社日検索へ</button>
     </div>
 
@@ -38,7 +38,7 @@
                 currentMode = 'kisha';
                 title.innerText = '帰社日検索';
                 input.placeholder = '社員名を入力してください（例：山下光輝）';
-                toggleBtn.innerText = 'FAQへ戻る';
+                toggleBtn.innerText = '勤怠検索へ戻る';
             } else {
                 currentMode = 'faq';
                 title.innerText = '社員専用FAQ';
