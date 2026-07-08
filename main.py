@@ -10,16 +10,20 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 class ChatRequest(BaseModel):
     message: str
-    mode: str # 接收模式: 'kisha' 或 'faq'
+    mode: str 
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    with open("rules.txt", "r", encoding="utf-8") as f:
-        full_data = f.read()
+    # 1. ファイル読み込みの例外処理
+    try:
+        with open("rules.txt", "r", encoding="utf-8") as f:
+            full_data = f.read()
+    except Exception as e:
+        return {"response": f"システムエラー: 資料ファイルが読み込めません。({str(e)})"}
 
-    # 根據模式設定不同的系統指令
+    # 2. モードによるシステムプロンプトの切り替え
     if request.mode == "kisha":
         system_prompt = "あなたは帰社日検索アシスタントです。ユーザーが質問した社員の所属課を特定し、その課の帰社日のみを正確に答えてください。"
     else:
@@ -33,12 +37,22 @@ async def chat(request: ChatRequest):
         "temperature": 0.0
     }
     
+    # 3. API通信の例外処理
     async with httpx.AsyncClient(timeout=30.0) as client:
-        res = await client.post("https://api.groq.com/openai/v1/chat/completions", 
-                                json=payload, 
-                                headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
-        data = res.json()
-        return {"response": data["choices"][0]["message"]["content"]}
+        try:
+            res = await client.post("https://api.groq.com/openai/v1/chat/completions", 
+                                    json=payload, 
+                                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+            
+            # APIエラーチェック
+            if res.status_code != 200:
+                return {"response": f"AIサーバーへの接続エラーです（Status: {res.status_code}）"}
+
+            data = res.json()
+            return {"response": data["choices"][0]["message"]["content"]}
+            
+        except Exception as e:
+            return {"response": f"通信エラーが発生しました: {str(e)}"}
 
 @app.get("/")
 async def get_index():
