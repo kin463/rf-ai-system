@@ -15,25 +15,28 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # 讀取整個 rules.txt 檔案內容
+    # 1. rules.txt を全読み込み
     try:
         with open("rules.txt", "r", encoding="utf-8") as f:
             full_context = f.read()
     except Exception:
-        return {"response": "資料文件讀取失敗，請確認伺服器配置。"}
+        return {"response": "資料が読み込めません。"}
     
-    # 讓 AI 根據全文來進行判斷
+    # 2. AI へのプロンプト（「推論」を強化）
+    # AIに「この人がどの部署のメンバーか」を資料から探させる
     prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    以下の【資料】に基づき、ユーザーの質問に回答してください。
+    提供された【資料】を読み込み、質問に回答してください。
     
+    【ルール】
+    - 質問された社員名がどの部署（課）のメンバーリストに含まれているかを探してください。
+    - 該当する部署の「帰社日」を見つけて回答してください。
+    - もし資料内に該当する名前がない場合は「その社員の情報は見つかりません」と答えてください。
+
     【資料】
     {full_context}
 
     【質問】
     {request.message}
-    
-    もし質問に関連する情報が資料内にない場合は「該当する情報が見つかりません」と答えてください。
-    また、特定の社員の帰社日を聞かれた場合は、資料内の組織構成を確認して所属課の帰社日を回答してください。
     """
 
     payload = {
@@ -50,7 +53,7 @@ async def chat(request: ChatRequest):
             data = res.json()
             return {"response": data["choices"][0]["message"]["content"]}
         except Exception:
-            return {"response": "サーバーエラーが発生しました。"}
+            return {"response": "回答生成中にエラーが発生しました。"}
 
 @app.get("/")
 async def get_index():
