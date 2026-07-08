@@ -13,32 +13,43 @@ class ChatRequest(BaseModel):
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
-def get_full_manual(filepath: str) -> str:
-    """検索せず、資料全体をそのまま返す（精度重視）"""
-    if not os.path.exists(filepath): return "規定資料が見つかりません。"
+def get_relevant_line(user_query: str, filepath: str) -> str:
+    """質問に含まれる名前がある行だけを抽出する"""
+    if not os.path.exists(filepath): return ""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
-            return f.read()
-    except: return "資料読み込みエラー"
+            lines = f.readlines()
+            # ユーザーの質問から名前部分を特定（例：山下光輝）
+            for line in lines:
+                if any(name in line for name in ["山下光輝", "大関颯人", "中山大揮", "竹本伊吹", "山田京右", "泉谷優馬", "山口晃広", "小栗泰雅", "濱田一輝", "金智賢"]):
+                    # 質問の中にその名前があれば、その行を返す
+                    if any(name in user_query for name in ["山下光輝", "大関颯人", "中山大揮", "竹本伊吹", "山田京右", "泉谷優馬", "山口晃広", "小栗泰雅", "濱田一輝", "金智賢"]):
+                        return line
+        return "" # 見つからない場合
+    except: return ""
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # 資料全体を読み込む
-    manual_content = get_full_manual("rules.txt")
+    # 該当する社員の行だけを抽出
+    employee_info = get_relevant_line(request.message, "rules.txt")
+    
+    # 資料全体も念のため読み込む（情報補完用）
+    with open("rules.txt", "r", encoding="utf-8") as f:
+        full_manual = f.read()
+
+    # 抽出した情報があればそれを優先、なければ全体から推論させる
+    context = employee_info if employee_info else full_manual
     
     prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    提供された【社内ルール資料】の組織図と帰社日スケジュールを照らし合わせ、社員の帰社日を回答してください。
+    以下の情報を元に、社員の帰社日を回答してください。
 
-    【重要：検索のコツ】
-    - ユーザーが質問した社員名が資料の「どこ」に記載されているか（どの課か）を確認してください。
-    - 課を特定した後、その課に指定された帰社日を探し出してください。
-    - もし入力された名前が資料と微妙に異なる場合（例：スペースの有無）でも、類似度が高い場合は回答してください。
-
-    【社内ルール資料】
-    {manual_content}
+    【情報】
+    {context}
 
     【質問】
     {request.message}
+
+    ※もし情報に「記載がない」場合は、「記載がありません」と回答してください。
     """
 
     payload = {
