@@ -16,18 +16,19 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_employee_info(query: str, filepath: str) -> str:
     """
-    資料データベースから、質問に含まれる名前の行を柔軟に抽出する
+    資料から社員情報を抽出する。完全一致ではなく部分一致を許容する。
     """
     if not os.path.exists(filepath): return ""
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
     
     for line in lines:
-        # [名前] という形式を抽出
+        # [名前] を取得する
         match = re.search(r'\[(.*?)\]', line)
         if match:
             employee_name = match.group(1)
-            # ユーザーの質問文の中に、資料内の社員名が含まれていればOKとする（例：山下光輝次 -> 山下光輝が含まれる）
+            # ユーザーの質問文の中に、資料内の社員名が「含まれている」だけでOKとする
+            # これにより「山下光輝次」と入力しても「山下光輝」を特定できる
             if employee_name in query:
                 return line
     return ""
@@ -39,20 +40,17 @@ async def chat(request: ChatRequest):
         with open("rules.txt", "r", encoding="utf-8") as f:
             context = f.read()
     else:
-        # 社員名検索
+        # 社員名検索を実行
         context = get_employee_info(request.message, "rules.txt")
-        # 検索にヒットしなかった場合、AIに「記載がない」ことを伝えるためのフラグを立てる
+        # ヒットしなかった場合
         if not context:
-            context = "NOT_FOUND"
+            return {"response": "該当する社員情報が見つかりません。お名前を正しく入力してください。"}
     
-    # プロンプトの構築
     prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    提供された【資料】に基づき、ユーザーの質問に正確に答えてください。
-    
-    もし【資料】が「NOT_FOUND」である場合は、「該当する社員情報が見つかりません。お名前を確認してください」と回答してください。
-    それ以外で情報がない場合は「記載がありません」と回答してください。
+    以下の情報を元に、帰社日や休暇ルールについて回答してください。
+    情報が足りない場合は「該当の情報がありません」と伝えてください。
 
-    【資料】
+    【参照資料】
     {context}
 
     【質問】
@@ -71,9 +69,11 @@ async def chat(request: ChatRequest):
                                     json=payload, 
                                     headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
             data = res.json()
-            return {"response": data["choices"][0]["message"]["content"]}
+            if "choices" in data:
+                return {"response": data["choices"][0]["message"]["content"]}
+            return {"response": "回答を生成できませんでした。"}
         except Exception:
-            return {"response": "サーバーエラーが発生しました。"}
+            return {"response": "通信エラーが発生しました。もう一度送信してください。"}
 
 @app.get("/")
 async def get_index():
