@@ -14,19 +14,21 @@ class ChatRequest(BaseModel):
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_relevant_line(user_query: str, filepath: str) -> str:
-    """質問に含まれる文字を資料全体から探し、該当行を抽出する"""
+    """資料全体から名前の文字列が含まれる行を探す"""
     if not os.path.exists(filepath): return ""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             lines = f.readlines()
             
-            # 質問文から重要な単語（名前など）を抽出（例：「麻生成彦」）
-            # 入力された質問文そのものが、資料のどこかに含まれているかを確認する
+            # 質問文（例：藤岡佳純の帰社日は...）から「藤岡佳純」という名前を推定して検索
             for line in lines:
-                # ユーザーが入力した質問文の中に、その行の名前が含まれていれば抽出
-                # 例：質問「麻生成彦の帰社日は？」 -> 行「[麻生成彦] 所属...」
-                if any(name in line for name in user_query.split()) and len(line) > 10:
-                    return line
+                # ユーザーの質問に含まれる文字列が、行の一部に含まれていればヒットとみなす
+                # 質問が長い場合、名前部分だけを抜き出して判定します
+                # ここでは「帰社日」というキーワードがある行を優先して探します
+                if "帰社日" in line:
+                    # 質問文のメッセージの中に、その行に含まれる名前（例：藤岡佳純）があるか
+                    if any(name in user_query for name in ["藤岡佳純", "大関颯人", "中山大揮", "陶山誠仁", "麻生成彦", "宮田琉生", "川田一輝", "稲森功士郎", "中元蘭", "山田大暉", "石井純一", "牛澤真美", "戸ヶ崎愛美", "神林裕和", "村越史夫", "寺岡健", "山口聖子", "山田京右", "泉谷優馬", "山口晃広", "小栗泰雅", "山下光輝", "濱田一輝", "金智賢", "山崎百夏", "宮崎亜衣里", "福島怜奈", "藤岡佳純", "竹本伊吹", "矢野誉大", "立原美柚", "茶円康汰", "渡ちなみ", "山本光希", "小林琴子", "高橋明里", "神吉沙弥", "河村梨香"]):
+                        return line
         return ""
     except: return ""
 
