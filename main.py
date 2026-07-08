@@ -1,5 +1,4 @@
 import os
-import re
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,49 +13,27 @@ class ChatRequest(BaseModel):
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
-def get_employee_info(query: str, filepath: str) -> str:
-    """
-    資料データベースから、質問に関連する社員情報の行を抽出する関数
-    正規表現を使用して、資料内の [名前] を正確に特定します。
-    """
-    if not os.path.exists(filepath): return ""
-    with open(filepath, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    
-    for line in lines:
-        # [名前] という形式を正規表現で自動検出
-        match = re.search(r'\[(.*?)\]', line)
-        if match:
-            employee_name = match.group(1)
-            # ユーザーの質問文の中に、資料内の社員名（例：「山下光輝」）が含まれていれば
-            # 「山下光輝次」のような入力でも正しくヒットさせる
-            if employee_name in query:
-                return line
-    return ""
-
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # 「一覧」という単語が含まれていれば、全資料をコンテキストとして渡す
-    if "一覧" in request.message:
+    # 讀取整個 rules.txt 檔案內容
+    try:
         with open("rules.txt", "r", encoding="utf-8") as f:
-            context = f.read()
-    else:
-        # 特定社員の情報を検索
-        context = get_employee_info(request.message, "rules.txt")
-        # 検索結果が空の場合、AIに伝える
-        if not context:
-            return {"response": "該当する社員情報が見つかりません。お名前を確認してください。"}
+            full_context = f.read()
+    except Exception:
+        return {"response": "資料文件讀取失敗，請確認伺服器配置。"}
     
-    # AIへの指示プロンプト
+    # 讓 AI 根據全文來進行判斷
     prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    提供された【資料】に基づき、ユーザーの質問に正確に答えてください。
-    情報がない場合は「記載がありません」と回答してください。
-
+    以下の【資料】に基づき、ユーザーの質問に回答してください。
+    
     【資料】
-    {context}
+    {full_context}
 
     【質問】
     {request.message}
+    
+    もし質問に関連する情報が資料内にない場合は「該当する情報が見つかりません」と答えてください。
+    また、特定の社員の帰社日を聞かれた場合は、資料内の組織構成を確認して所属課の帰社日を回答してください。
     """
 
     payload = {
@@ -71,11 +48,9 @@ async def chat(request: ChatRequest):
                                     json=payload, 
                                     headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
             data = res.json()
-            if "choices" in data:
-                return {"response": data["choices"][0]["message"]["content"]}
-            return {"response": "回答の生成に失敗しました。"}
-        except Exception as e:
-            return {"response": f"通信エラーが発生しました: {str(e)}"}
+            return {"response": data["choices"][0]["message"]["content"]}
+        except Exception:
+            return {"response": "サーバーエラーが発生しました。"}
 
 @app.get("/")
 async def get_index():
