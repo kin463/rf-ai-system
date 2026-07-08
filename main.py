@@ -16,19 +16,18 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_employee_info(query: str, filepath: str) -> str:
     """
-    資料から社員情報を抽出する。完全一致ではなく部分一致を許容する。
+    資料データベースから、質問に含まれる名前の行を柔軟に抽出する関数
     """
     if not os.path.exists(filepath): return ""
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
     
     for line in lines:
-        # [名前] を取得する
+        # [名前] という形式を正規表現で自動検出
         match = re.search(r'\[(.*?)\]', line)
         if match:
             employee_name = match.group(1)
-            # ユーザーの質問文の中に、資料内の社員名が「含まれている」だけでOKとする
-            # これにより「山下光輝次」と入力しても「山下光輝」を特定できる
+            # ★ここが重要：完全一致ではなく、ユーザーの質問文にその名前が含まれていればOKとする
             if employee_name in query:
                 return line
     return ""
