@@ -14,18 +14,20 @@ class ChatRequest(BaseModel):
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_relevant_line(user_query: str, filepath: str) -> str:
-    """質問に含まれる名前がある行だけを抽出する"""
+    """質問に含まれる文字を資料全体から探し、該当行を抽出する"""
     if not os.path.exists(filepath): return ""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             lines = f.readlines()
-            # ユーザーの質問から名前部分を特定（例：山下光輝）
+            
+            # 質問文から重要な単語（名前など）を抽出（例：「麻生成彦」）
+            # 入力された質問文そのものが、資料のどこかに含まれているかを確認する
             for line in lines:
-                if any(name in line for name in ["山下光輝", "大関颯人", "中山大揮", "竹本伊吹", "山田京右", "泉谷優馬", "山口晃広", "小栗泰雅", "濱田一輝", "金智賢"]):
-                    # 質問の中にその名前があれば、その行を返す
-                    if any(name in user_query for name in ["山下光輝", "大関颯人", "中山大揮", "竹本伊吹", "山田京右", "泉谷優馬", "山口晃広", "小栗泰雅", "濱田一輝", "金智賢"]):
-                        return line
-        return "" # 見つからない場合
+                # ユーザーが入力した質問文の中に、その行の名前が含まれていれば抽出
+                # 例：質問「麻生成彦の帰社日は？」 -> 行「[麻生成彦] 所属...」
+                if any(name in line for name in user_query.split()) and len(line) > 10:
+                    return line
+        return ""
     except: return ""
 
 @app.post("/api/chat")
