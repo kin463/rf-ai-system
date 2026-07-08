@@ -2,34 +2,60 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>R&F AI アシスタント</title>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background-color: #f4f7f6; }
-        textarea { width: 100%; height: 120px; margin-bottom: 10px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
-        button#send-btn { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; }
-        #response { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; border-left: 5px solid #007bff; min-height: 50px; }
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; background-color: #f4f7f6; }
+        .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .toggle-btn { padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        
+        textarea { width: 100%; height: 120px; margin-bottom: 15px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+        button#send-btn { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+        #response { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; min-height: 50px; border-left: 5px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body>
 
-    <h2>R&F 社員専用アシスタント</h2>
-    <p>規定や帰社日について、お気軽にご質問ください。</p>
+    <div class="header-area">
+        <h2 id="title">社員専用FAQ</h2>
+        <button class="toggle-btn" id="mode-toggle" onclick="toggleMode()">帰社日検索へ</button>
+    </div>
 
-    <textarea id="input" placeholder="例：山下光輝の帰社日はいつ？ / 結婚祝金はいくら？"></textarea>
+    <textarea id="input" placeholder="社内規定や休暇について質問してください..."></textarea>
     <button id="send-btn" onclick="sendMessage()">送信</button>
 
-    <div id="response">回答がここに表示されます...</div>
+    <div id="response">ここに回答が表示されます</div>
 
     <script>
+        let currentMode = 'faq'; // デフォルトをFAQに設定
+
+        function toggleMode() {
+            const title = document.getElementById('title');
+            const input = document.getElementById('input');
+            const toggleBtn = document.getElementById('mode-toggle');
+
+            if (currentMode === 'faq') {
+                currentMode = 'kisha';
+                title.innerText = '帰社日検索';
+                input.placeholder = '社員名を入力してください（例：山下光輝）';
+                toggleBtn.innerText = 'FAQへ戻る';
+            } else {
+                currentMode = 'faq';
+                title.innerText = '社員専用FAQ';
+                input.placeholder = '社内規定や休暇について質問してください...';
+                toggleBtn.innerText = '帰社日検索へ';
+            }
+        }
+
         async function sendMessage() {
             const msg = document.getElementById('input').value;
             const resDiv = document.getElementById('response');
-            resDiv.innerText = "考え中...";
+            resDiv.innerText = "回答を生成中...";
             
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ message: msg })
+                body: JSON.stringify({ message: msg, mode: currentMode })
             });
             const data = await res.json();
             resDiv.innerText = data.response;
