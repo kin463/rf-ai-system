@@ -10,34 +10,22 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 class ChatRequest(BaseModel):
     message: str
+    mode: str # 接收模式: 'kisha' 或 'faq'
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # 1. rules.txt を全読み込み
-    try:
-        with open("rules.txt", "r", encoding="utf-8") as f:
-            full_context = f.read()
-    except Exception:
-        return {"response": "資料が読み込めません。"}
-    
-    # 2. AI へのプロンプト（「推論」を強化）
-    # AIに「この人がどの部署のメンバーか」を資料から探させる
-    prompt = f"""あなたはR&F株式会社のAIアシスタントです。
-    提供された【資料】を読み込み、質問に回答してください。
-    
-    【ルール】
-    - 質問された社員名がどの部署（課）のメンバーリストに含まれているかを探してください。
-    - 該当する部署の「帰社日」を見つけて回答してください。
-    - もし資料内に該当する名前がない場合は「その社員の情報は見つかりません」と答えてください。
+    with open("rules.txt", "r", encoding="utf-8") as f:
+        full_data = f.read()
 
-    【資料】
-    {full_context}
+    # 根據模式設定不同的系統指令
+    if request.mode == "kisha":
+        system_prompt = "あなたは帰社日検索アシスタントです。ユーザーが質問した社員の所属課を特定し、その課の帰社日のみを正確に答えてください。"
+    else:
+        system_prompt = "あなたは社内規定FAQアシスタントです。提供された資料に基づき、休暇規定や手当などの質問に丁寧に回答してください。"
 
-    【質問】
-    {request.message}
-    """
+    prompt = f"{system_prompt}\n\n【資料】\n{full_data}\n\n【質問】\n{request.message}"
 
     payload = {
         "model": "llama-3.1-8b-instant",
@@ -46,14 +34,11 @@ async def chat(request: ChatRequest):
     }
     
     async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            res = await client.post("https://api.groq.com/openai/v1/chat/completions", 
-                                    json=payload, 
-                                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
-            data = res.json()
-            return {"response": data["choices"][0]["message"]["content"]}
-        except Exception:
-            return {"response": "回答生成中にエラーが発生しました。"}
+        res = await client.post("https://api.groq.com/openai/v1/chat/completions", 
+                                json=payload, 
+                                headers={"Authorization": f"Bearer {GROQ_API_KEY}"})
+        data = res.json()
+        return {"response": data["choices"][0]["message"]["content"]}
 
 @app.get("/")
 async def get_index():
