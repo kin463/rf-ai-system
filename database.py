@@ -2,7 +2,6 @@ import re
 
 def get_member_schedule(input_name: str):
     try:
-        # Renderで文字コードエラー回避のためerrors='ignore'追加
         with open("rules.txt", "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
     except Exception as e:
@@ -15,5 +14,6 @@ def get_member_schedule(input_name: str):
         member_list = [name.strip() for name in member_text.split(",")]
         for name in member_list:
             if input_name in name:
-                results.append((department, date_text.strip()))
+                # (フルネーム, 部門名, 帰社日) の順番で返却
+                results.append((name, department, date_text.strip()))
     return results
