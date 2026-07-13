@@ -1,214 +1,115 @@
 <!DOCTYPE html>
-
 <html lang="ja">
-
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>AI アシスタント</title>
-
     <style>
-
         body { font-family: sans-serif; background-color: #f4f7f6; margin: 0; padding: 0; }
-
-        
-
-        /* ヘッダー */
-
-        header { 
-
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); 
-
-            color: white; 
-
-            padding: 30px 20px; 
-
-            text-align: center; 
-
-        }
-
+        header { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color: white; padding: 30px 20px; text-align: center; }
         header h1 { margin: 0; font-size: 28px; }
-
         header p { margin: 5px 0 0 0; opacity: 0.9; }
-
-
-
-        /* コンテナ */
-
         .container { max-width: 800px; margin: 20px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-
-
-
-        /* ヘッダー行 */
-
         .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-
         .header-row h2 { margin: 0; font-size: 24px; color: #333; }
-
         .switch-btn { background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
-
         .switch-btn:hover { background: #5a6268; }
-
-
-
-        /* 入力エリア */
-
         textarea { width: 100%; height: 150px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-size: 16px; margin-bottom: 20px; }
-
-
-
-        /* 送信ボタン */
-
         .send-btn { width: 100%; background: #007bff; color: white; border: none; padding: 15px; font-size: 18px; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
-
         .send-btn:hover { background: #0056b3; }
-
-
-
-        /* 回答エリア */
-
         #result { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; min-height: 50px; border-left: 5px solid #007bff; color: #333; line-height: 1.6; }
-
+        
+        /* 評価ボタンのデザイン（既存デザインに馴染むように） */
+        .feedback-btns { margin-top: 10px; display: none; }
+        .feedback-btn { padding: 5px 15px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #fff; }
     </style>
-
 </head>
-
 <body>
 
-
-
 <header>
-
     <h1>🤖 AI アシスタント</h1>
-
     <p>ようこそ</p>
-
 </header>
 
-
-
 <div class="container">
-
     <div class="header-row">
-
-        <h2>勤怠検索</h2>
-
+        <h2 id="title">勤怠検索</h2>
         <button class="switch-btn" id="switchBtn">帰社日検索へ</button>
-
     </div>
 
-
-
     <textarea id="message" placeholder="社内規定や休暇について質問してください..."></textarea>
-
     <button class="send-btn" onclick="sendMessage()">送信</button>
 
-
-
     <div id="result">ここに回答が表示されます</div>
-
+    
+    <!-- 追加：評価ボタンエリア -->
+    <div id="feedback-btns" class="feedback-btns">
+        <button class="feedback-btn" onclick="sendFeedback(true)">👍 良かった</button>
+        <button class="feedback-btn" onclick="sendFeedback(false)">👎 誤っている</button>
+    </div>
 </div>
 
-
-
 <script>
-
-    // 現在のモード (faq または kisha)
-
     let currentMode = 'faq';
-
-
-
-    // UI要素の取得
+    let lastQuestion = '';
 
     const switchBtn = document.getElementById('switchBtn');
-
     const title = document.querySelector('.header-row h2');
-
     const textarea = document.getElementById('message');
 
-
-
-    // モード切り替えロジック
-
     switchBtn.addEventListener('click', () => {
-
         if (currentMode === 'faq') {
-
             currentMode = 'kisha';
-
             title.innerText = '帰社日検索';
-
             textarea.placeholder = '社員名や課名を入力してください...';
-
             switchBtn.innerText = '勤怠検索へ戻る';
-
         } else {
-
             currentMode = 'faq';
-
             title.innerText = '勤怠検索';
-
             textarea.placeholder = '社内規定や休暇について質問してください...';
-
             switchBtn.innerText = '帰社日検索へ';
-
         }
-
     });
 
-
-
-    // メッセージ送信ロジック
-
     async function sendMessage() {
-
-        const message = textarea.value;
+        lastQuestion = textarea.value;
+        if (!lastQuestion.trim()) return alert("質問を入力してください");
 
         const resultDiv = document.getElementById('result');
-
-        
-
-        if (!message.trim()) return alert("質問を入力してください");
-
-
-
         resultDiv.innerText = "考え中...";
-
-
+        document.getElementById('feedback-btns').style.display = 'none';
 
         try {
-
             const response = await fetch('/api/chat', {
-
                 method: 'POST',
-
                 headers: { 'Content-Type': 'application/json' },
-
-                body: JSON.stringify({ message: message, mode: currentMode })
-
+                body: JSON.stringify({ message: lastQuestion, mode: currentMode })
             });
-
             const data = await response.json();
-
             resultDiv.innerText = data.response;
-
+            document.getElementById('feedback-btns').style.display = 'block';
         } catch (error) {
-
-            resultDiv.innerText = "エラーが発生しました。サーバーが起動しているか確認してください。";
-
+            resultDiv.innerText = "エラーが発生しました。";
         }
-
     }
 
+    async function sendFeedback(isGood) {
+        if (isGood) {
+            alert("評価ありがとうございます！");
+        } else {
+            const resultText = document.getElementById('result').innerText;
+            await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    question: lastQuestion, 
+                    correct_answer: "【修正要】誤った回答: " + resultText 
+                })
+            });
+            alert("ご指摘ありがとうございます。改善リストに記録しました。");
+        }
+        document.getElementById('feedback-btns').style.display = 'none';
+    }
 </script>
-
-
-
 </body>
-
-</html> 
-
+</html>
