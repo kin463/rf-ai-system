@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -9,10 +9,8 @@ from database import get_member_schedule
 
 app = FastAPI()
 
-# 静的ファイルの設定
 app.mount("/static", StaticFiles(directory="."), name="static")
 
-# CORS設定
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,19 +18,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Groqの初期化
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 class ChatRequest(BaseModel):
     message: str
     mode: str
 
-# ヘルスチェック用ルート
 @app.get("/health")
 async def health():
     return {"status": "success", "message": "RF AI System is online."}
 
-# トップページでindex.htmlを表示
 @app.get("/")
 async def root():
     html_file = os.path.join(os.path.dirname(__file__), "index.html")
@@ -40,50 +35,51 @@ async def root():
 
 def get_rules_text():
     try:
-        with open("rules.txt", "r", encoding="utf-8") as f:
+        with open("rules.txt", "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
-    except:
+    except Exception as e:
+        print("rules.txt読み込み失敗:", str(e))
         return "規定データが読み込めません。"
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # AIの幻覚を禁止する厳格なSystem Prompt
     system_prompt = """
     必ず渡された資料に記載されている内容だけで回答してください。
     資料に記載がない事項に関しては「資料に記載がありません」と回答し、自分で推測や常識、外部知識を追加しないでください。
     回答は丁寧な日本語で簡潔にまとめてください。
     """
-
-    if request.mode == "kisha":
-        # Python側でrules.txtから正確に帰社日を抽出、AIにデータ作成させない
-        results = get_member_schedule(request.message)
-        if not results:
-            return {"response": "該当するメンバーが見つかりませんでした。"}
-        context = "\n".join([f"{dept}: {date_time}" for dept, date_time in results])
-        final_prompt = f"""
-        こちらの情報だけを利用して丁寧な日本語でまとめてください。
-        情報を追加・改変しないでください。
-        {context}
-        """
-    else:
-        rules = get_rules_text()
-        final_prompt = f"""
-        下記の社内規定の範囲内だけで回答してください。記載のない事項は絶対に答えないこと。
-        【社内規定】
-        {rules}
-        【質問】
-        {request.message}
-        """
     try:
+        if request.mode == "kisha":
+            results = get_member_schedule(request.message)
+            if not results:
+                return {"response": "該当するメンバーが見つかりませんでした。"}
+            context = "\n".join([f"{dept}: {date_time}" for dept, date_time in results])
+            final_prompt = f"""
+            こちらの情報だけを利用して丁寧な日本語でまとめてください。
+            情報を追加・改変しないでください。
+            {context}
+            """
+        else:
+            rules = get_rules_text()
+            final_prompt = f"""
+            下記の社内規定の範囲内だけで回答してください。記載のない事項は絶対に答えないこと。
+            【社内規定】
+            {rules}
+            【質問】
+            {request.message}
+            """
+        # モデル名を正式名称に修正
         completion = client.chat.completions.create(
-            model="llama3-70b-8192",
+            model="llama-3-70b-8192",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": final_prompt}
             ],
-            temperature=0.1,  # 値を0.1に下げてAIの独創性を抑え正確性を上げる
+            temperature=0.1,
             top_p=0.2
         )
         return {"response": completion.choices[0].message.content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # HTTP例外を発生させず、responseキーを返すことでundefinedを回避
+        print("API処理エラー：", str(e))
+        return {"response": f"サーバーエラー：{str(e)}"}
