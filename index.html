@@ -2,48 +2,24 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI アシスタント</title>
     <style>
-        body { font-family: sans-serif; background-color: #f4f7f6; margin: 0; padding: 0; }
-        header { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color: white; padding: 30px 20px; text-align: center; }
-        header h1 { margin: 0; font-size: 28px; }
-        .container { max-width: 800px; margin: 20px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        textarea { width: 100%; height: 150px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-size: 16px; margin-bottom: 20px; }
-        .send-btn { width: 100%; background: #007bff; color: white; border: none; padding: 15px; font-size: 18px; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
-        .send-btn:hover { background: #0056b3; }
-        #result { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; border-left: 5px solid #007bff; color: #333; line-height: 1.6; white-space: pre-wrap; }
-        
-        /* フィードバック用の調整 */
-        #feedback-trigger { margin-top: 10px; cursor: pointer; color: #666; font-size: 13px; text-decoration: underline; display: none; }
-        #feedback-area { margin-top: 15px; padding: 15px; background: #fff3f3; border: 1px solid #ffcdd2; border-radius: 5px; display: none; }
-        .feedback-btn { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+        textarea { width: 100%; height: 100px; }
+        #result { margin-top: 20px; padding: 15px; border: 1px solid #ddd; white-space: pre-wrap; }
     </style>
 </head>
 <body>
-
-<header>
-    <h1>🤖 AI アシスタント</h1>
-</header>
-
 <div class="container">
-    <div class="header-row">
-        <h2 id="title">勤怠検索</h2>
-        <button id="switchBtn">帰社日検索へ</button>
-    </div>
-
-    <textarea id="message" placeholder="社内規定や休暇について質問してください..."></textarea>
-    <button class="send-btn" onclick="sendMessage()">送信</button>
-
+    <h2 id="title">勤怠検索</h2>
+    <button id="switchBtn">帰社日検索へ</button>
+    <textarea id="message" placeholder="質問を入力..."></textarea>
+    <button onclick="sendMessage()">送信</button>
     <div id="result">ここに回答が表示されます</div>
-
-    <!-- 普段は隠しておくフィードバック用リンクとエリア -->
-    <div id="feedback-trigger" onclick="toggleFeedback()">回答が正しくない場合はこちら</div>
-    <div id="feedback-area">
-        <p style="margin: 0 0 10px 0; font-size: 14px;">正確な回答を教えてください：</p>
-        <textarea id="correction" style="width: 100%; height: 60px;" placeholder="正しい情報を入力"></textarea>
-        <button class="feedback-btn" onclick="sendFeedback()">学習させる</button>
+    <div id="feedback-btns" style="display:none; margin-top: 10px;">
+        <button onclick="sendFeedback(true)">👍 良かった</button>
+        <button onclick="sendFeedback(false)">👎 誤っている</button>
     </div>
 </div>
 
@@ -51,59 +27,40 @@
     let currentMode = 'faq';
     let lastQuestion = '';
 
-    const switchBtn = document.getElementById('switchBtn');
-    const title = document.getElementById('title');
-    const textarea = document.getElementById('message');
-
-    switchBtn.addEventListener('click', () => {
-        currentMode = (currentMode === 'faq') ? 'kisha' : 'faq';
-        title.innerText = (currentMode === 'kisha') ? '帰社日検索' : '勤怠検索';
-        textarea.placeholder = (currentMode === 'kisha') ? '社員名や課名を入力してください...' : '社内規定や休暇について質問してください...';
-        switchBtn.innerText = (currentMode === 'kisha') ? '勤怠検索へ戻る' : '帰社日検索へ';
-    });
-
-    function toggleFeedback() {
-        const area = document.getElementById('feedback-area');
-        area.style.display = (area.style.display === 'none' || area.style.display === '') ? 'block' : 'none';
-    }
-
     async function sendMessage() {
-        const message = textarea.value;
-        const resultDiv = document.getElementById('result');
-        if (!message.trim()) return alert("質問を入力してください");
-
+        const message = document.getElementById('message').value;
         lastQuestion = message;
-        resultDiv.innerText = "考え中...";
-        document.getElementById('feedback-trigger').style.display = 'none';
-        document.getElementById('feedback-area').style.display = 'none';
-
-        try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: message, mode: currentMode })
-            });
-            const data = await response.json();
-            resultDiv.innerText = data.response;
-            document.getElementById('feedback-trigger').style.display = 'block'; // 回答後にリンクを表示
-        } catch (error) {
-            resultDiv.innerText = "エラーが発生しました。";
-        }
-    }
-
-    async function sendFeedback() {
-        const correction = document.getElementById('correction').value;
-        if (!correction.trim()) return alert("正しい情報を入力してください");
-
-        await fetch('/api/feedback', {
+        document.getElementById('result').innerText = "考え中...";
+        const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: lastQuestion, correct_answer: correction })
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: message, mode: currentMode })
         });
-        alert("学習しました！ご協力ありがとうございます。");
-        document.getElementById('feedback-area').style.display = 'none';
+        const data = await response.json();
+        document.getElementById('result').innerText = data.response;
+        document.getElementById('feedback-btns').style.display = 'block';
     }
-</script>
 
+    async function sendFeedback(isGood) {
+        if (!isGood) {
+            const resultText = document.getElementById('result').innerText;
+            await fetch('/api/feedback', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ question: lastQuestion, correct_answer: "【修正要】AIの回答: " + resultText })
+            });
+            alert("ご指摘ありがとうございます。改善リストに記録しました。");
+        } else {
+            alert("評価ありがとうございます！");
+        }
+        document.getElementById('feedback-btns').style.display = 'none';
+    }
+
+    document.getElementById('switchBtn').onclick = () => {
+        currentMode = (currentMode === 'faq') ? 'kisha' : 'faq';
+        document.getElementById('title').innerText = (currentMode === 'kisha') ? '帰社日検索' : '勤怠検索';
+        document.getElementById('switchBtn').innerText = (currentMode === 'kisha') ? '勤怠検索へ戻る' : '帰社日検索へ';
+    };
+</script>
 </body>
 </html>
