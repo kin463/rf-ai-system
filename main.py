@@ -1,4 +1,5 @@
 import os
+import re
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -43,7 +44,6 @@ def get_rules_text():
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    # 厳格化したプロンプト
     system_prompt = """
     絶対に守るルール：
     1. 渡された社内規定のテキストだけを参照して回答してください。
@@ -65,11 +65,33 @@ async def chat(request: ChatRequest):
             reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
             return {"response": reply}
         else:
-            rules = get_rules_text()
+            full_rules = get_rules_text()
+            question = request.message.strip()
+
+            # rules.txtをブロックごとに分割
+            block_kyuka = re.search(r"\[休暇規定\]([\s\S]*?)\[慶弔見舞金\]", full_rules).group(1)
+            block_keijou = re.search(r"\[慶弔見舞金\]([\s\S]*?)\[災害補償\]", full_rules).group(1)
+            block_saigai = re.search(r"\[災害補償\]([\s\S]*?)\[給与・手当・評価\]", full_rules).group(1)
+            block_salary = re.search(r"\[給与・手当・評価\]([\s\S]*?)\[資格取得支援\]", full_rules).group(1)
+            block_kintai = re.search(r"\[勤怠・提出・連絡ルール\][\s\S]*$", full_rules).group(0)
+
+            selected_text = ""
+            # キーワードにより必要なブロックだけ選択
+            if any(word in question for word in ["休暇", "有給", "結婚", "死亡", "出産", "弔慰金"]):
+                selected_text += block_kyuka + block_keijou
+            if any(word in question for word in ["給与", "基本給", "手当", "昇給", "災害補償"]):
+                selected_text += block_saigai + block_salary
+            if any(word in question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡"]):
+                selected_text += block_kintai
+            
+            # どのカテゴリにも該当しない場合Groqを呼び出さない
+            if selected_text == "":
+                return {"response": "資料に記載がありません"}
+
             final_prompt = f"""
             社内規定の記載内容だけを使用し回答してください。記載されていない内容に対しては「資料に記載がありません」と返してください。
             【社内規定】
-            {rules}
+            {selected_text}
             【質問】
             {request.message}
             """
