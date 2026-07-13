@@ -9,7 +9,8 @@ def get_member_schedule(input_name: str):
         return []
 
     results = []
-    pattern = re.compile(r"\[(RandF .+?課)\]\s*メンバー:(.+?)\n帰社日:(.+?)(?=\n\[|$)", re.DOTALL)
+    # 「課」だけでなく「部」にも対応するように修正
+    pattern = re.compile(r"\[(RandF .+?)\]\s*メンバー:(.+?)\n帰社日:(.+?)(?=\n\[|$)", re.DOTALL)
     for department, member_text, date_text in pattern.findall(content):
         member_list = [name.strip() for name in member_text.split(",")]
         # 入力が部門名に部分一致したら課の全員を追加
