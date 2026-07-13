@@ -1,16 +1,21 @@
 import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from groq import Groq
 from database import get_member_schedule
 
 app = FastAPI()
 
+# 設定靜態檔案：根目錄讀取 index.html
+app.mount("/static", StaticFiles(directory="."), name="static")
+
 # 設定 CORS，允許來自任何來源的前端存取 API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 若需提升安全性，可設定為您的前端網域
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -24,7 +29,9 @@ class ChatRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"status": "success", "message": "RF AI System is online."}
+    # 傳送根目錄的 index.html
+    html_file = os.path.join(os.path.dirname(__file__), "index.html")
+    return FileResponse(html_file)
 
 def get_rules_text():
     try:
