@@ -118,7 +118,7 @@ async def chat(request: ChatRequest):
                 selected_text += block_kyuka + block_keijou
             if any(word in question for word in ["給与", "基本給", "手当", "昇給", "災害補償"]):
                 selected_text += block_saigai + block_salary
-            if any(word in question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡"]):
+            if any(word in question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡", "帰社"]):
                 selected_text += block_kintai
             
             if selected_text == "":
