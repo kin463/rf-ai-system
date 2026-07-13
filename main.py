@@ -50,16 +50,18 @@ async def chat(request: ChatRequest):
     """
     try:
         if request.mode == "kisha":
+            # 帰社日検索：Groqを使用せずPythonのみで文章作成、モデルの影響を受けない
             results = get_member_schedule(request.message)
             if not results:
                 return {"response": "該当するメンバーが見つかりませんでした。"}
-            context = "\n".join([f"{dept}: {date_time}" for dept, date_time in results])
-            final_prompt = f"""
-            こちらの情報だけを利用して丁寧な日本語でまとめてください。
-            情報を追加・改変しないでください。
-            {context}
-            """
+            lines = []
+            for dept, date_time in results:
+                lines.append(f"{dept}：{date_time}")
+            content_text = "\n".join(lines)
+            reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
+            return {"response": reply}
         else:
+            # 勤怠・規定質問のみGroqを使用
             rules = get_rules_text()
             final_prompt = f"""
             下記の社内規定の範囲内だけで回答してください。記載のない事項は絶対に答えないこと。
@@ -68,18 +70,16 @@ async def chat(request: ChatRequest):
             【質問】
             {request.message}
             """
-        # モデル名を正式名称に修正
-        completion = client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": final_prompt}
-            ],
-            temperature=0.1,
-            top_p=0.2
-        )
-        return {"response": completion.choices[0].message.content}
+            completion = client.chat.completions.create(
+                model="llama-3.3-8b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": final_prompt}
+                ],
+                temperature=0.1,
+                top_p=0.2
+            )
+            return {"response": completion.choices[0].message.content}
     except Exception as e:
-        # HTTP例外を発生させず、responseキーを返すことでundefinedを回避
         print("API処理エラー：", str(e))
         return {"response": f"サーバーエラー：{str(e)}"}
