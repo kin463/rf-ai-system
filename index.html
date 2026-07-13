@@ -15,8 +15,9 @@
         .send-btn:hover { background: #0056b3; }
         #result { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; border-left: 5px solid #007bff; color: #333; line-height: 1.6; white-space: pre-wrap; }
         
-        /* フィードバック用のスタイル */
-        #feedback-area { margin-top: 20px; padding: 15px; background: #fff3f3; border: 1px solid #ffcdd2; border-radius: 5px; display: none; }
+        /* フィードバック用の調整 */
+        #feedback-trigger { margin-top: 10px; cursor: pointer; color: #666; font-size: 13px; text-decoration: underline; display: none; }
+        #feedback-area { margin-top: 15px; padding: 15px; background: #fff3f3; border: 1px solid #ffcdd2; border-radius: 5px; display: none; }
         .feedback-btn { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
@@ -37,17 +38,18 @@
 
     <div id="result">ここに回答が表示されます</div>
 
-    <!-- フィードバックエリア -->
+    <!-- 普段は隠しておくフィードバック用リンクとエリア -->
+    <div id="feedback-trigger" onclick="toggleFeedback()">回答が正しくない場合はこちら</div>
     <div id="feedback-area">
-        <p>回答が誤っていますか？正確な内容を教えてください：</p>
-        <textarea id="correction" style="height: 80px;" placeholder="正しい情報を入力してください"></textarea>
+        <p style="margin: 0 0 10px 0; font-size: 14px;">正確な回答を教えてください：</p>
+        <textarea id="correction" style="width: 100%; height: 60px;" placeholder="正しい情報を入力"></textarea>
         <button class="feedback-btn" onclick="sendFeedback()">学習させる</button>
     </div>
 </div>
 
 <script>
     let currentMode = 'faq';
-    let lastQuestion = ''; // 最後に質問した内容を保持
+    let lastQuestion = '';
 
     const switchBtn = document.getElementById('switchBtn');
     const title = document.getElementById('title');
@@ -60,13 +62,19 @@
         switchBtn.innerText = (currentMode === 'kisha') ? '勤怠検索へ戻る' : '帰社日検索へ';
     });
 
+    function toggleFeedback() {
+        const area = document.getElementById('feedback-area');
+        area.style.display = (area.style.display === 'none' || area.style.display === '') ? 'block' : 'none';
+    }
+
     async function sendMessage() {
         const message = textarea.value;
         const resultDiv = document.getElementById('result');
         if (!message.trim()) return alert("質問を入力してください");
 
-        lastQuestion = message; // 質問を保存
+        lastQuestion = message;
         resultDiv.innerText = "考え中...";
+        document.getElementById('feedback-trigger').style.display = 'none';
         document.getElementById('feedback-area').style.display = 'none';
 
         try {
@@ -77,7 +85,7 @@
             });
             const data = await response.json();
             resultDiv.innerText = data.response;
-            document.getElementById('feedback-area').style.display = 'block'; // 回答後に表示
+            document.getElementById('feedback-trigger').style.display = 'block'; // 回答後にリンクを表示
         } catch (error) {
             resultDiv.innerText = "エラーが発生しました。";
         }
