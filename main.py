@@ -67,7 +67,10 @@ async def chat(request: ChatRequest):
                 return {"response": "該当するメンバーが見つかりませんでした。"}
             lines = []
             for fullname, dept, date_time in results:
-                lines.append(f"{fullname} {dept}：帰社日：{date_time}")
+                if date_time == "":
+                    lines.append(f"{fullname} {dept}：帰社日は設定されていません")
+                else:
+                    lines.append(f"{fullname} {dept}：帰社日：{date_time}")
             content_text = "\n".join(lines)
             reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
             return {"response": reply}
