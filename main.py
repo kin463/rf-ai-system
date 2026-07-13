@@ -50,18 +50,16 @@ async def chat(request: ChatRequest):
     """
     try:
         if request.mode == "kisha":
-            # 帰社日検索：Groqを使用せずPythonのみで文章作成
             results = get_member_schedule(request.message)
             if not results:
                 return {"response": "該当するメンバーが見つかりませんでした。"}
             lines = []
-            for dept, date_time in results:
-                lines.append(f"{dept}：{date_time}")
+            for fullname, dept, date_time in results:
+                lines.append(f"{fullname} {dept}：帰社日：{date_time}")
             content_text = "\n".join(lines)
             reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
             return {"response": reply}
         else:
-            # 勤怠・規定質問のみGroqを実行
             rules = get_rules_text()
             final_prompt = f"""
             下記の社内規定の範囲内だけで回答してください。記載のない事項は絶対に答えないこと。
