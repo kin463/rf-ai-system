@@ -43,10 +43,15 @@ def get_rules_text():
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
+    # 厳格化したプロンプト
     system_prompt = """
-    必ず渡された資料に記載されている内容だけで回答してください。
-    資料に記載がない事項に関しては「資料に記載がありません」と回答し、自分で推測や常識、外部知識を追加しないでください。
-    回答は丁寧な日本語で簡潔にまとめてください。
+    絶対に守るルール：
+    1. 渡された社内規定のテキストだけを参照して回答してください。
+    2. 規定文に記載されていない事柄については、余計な文章を一切追加せず「資料に記載がありません」の一文だけを返答する。
+    3. 自分の知識や一般常識、外部情報を使って推測・補足しては絶対にいけません。
+    4. 条件が限定されている場合は対象範囲を勝手に広げない。
+       例：本人結婚の休暇は本人のみ適用、友人の結婚は対象外と判断する。
+    5. 回答は簡潔な日本語にまとめ、余分な解説文を記述しない。
     """
     try:
         if request.mode == "kisha":
@@ -62,7 +67,7 @@ async def chat(request: ChatRequest):
         else:
             rules = get_rules_text()
             final_prompt = f"""
-            下記の社内規定の範囲内だけで回答してください。記載のない事項は絶対に答えないこと。
+            社内規定の記載内容だけを使用し回答してください。記載されていない内容に対しては「資料に記載がありません」と返してください。
             【社内規定】
             {rules}
             【質問】
@@ -74,10 +79,10 @@ async def chat(request: ChatRequest):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": final_prompt}
                 ],
-                temperature=0.1,
-                top_p=0.2
+                temperature=0.0,
+                top_p=0.1
             )
-            return {"response": completion.choices[0].message.content}
+            return {"response": completion.choices[0].message.content.strip()}
     except Exception as e:
         print("API処理エラー：", str(e))
         return {"response": f"サーバーエラー：{str(e)}"}
