@@ -42,6 +42,13 @@ def get_rules_text():
         print("rules.txt読み込み失敗:", str(e))
         return "規定データが読み込めません。"
 
+def extract_year(text: str):
+    """文章から数字（勤続年数）を抜き出す"""
+    nums = re.findall(r"\d+", text)
+    if nums:
+        return int(nums[0])
+    return None
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     system_prompt = """
@@ -65,26 +72,55 @@ async def chat(request: ChatRequest):
             reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
             return {"response": reply}
         else:
-            full_rules = get_rules_text()
             question = request.message.strip()
+            # ==========Python側で数値判断を実行（Groqを呼び出さない）==========
+            # 1.結婚祝い金判定
+            if "結婚祝い" in question or "結婚祝金" in question:
+                years = extract_year(question)
+                if years is not None:
+                    if years < 2:
+                        return {"response": "2万円"}
+                    elif 2 <= years < 5:
+                        return {"response": "3万円"}
+                    elif years >= 5:
+                        return {"response": "5万円"}
 
-            # rules.txtをブロックごとに分割
+            # 2.年次有給休暇の日数判定
+            if "有給休暇" in question or "年次有給" in question:
+                years = extract_year(question)
+                if years is not None:
+                    if years == 0: #入社6か月
+                        return {"response": "10日"}
+                    elif years == 1: #1年6か月
+                        return {"response": "11日"}
+                    elif years == 2: #2年6か月
+                        return {"response": "12日"}
+                    elif years == 3: #3年6か月
+                        return {"response": "14日"}
+                    elif years == 4: #4年6か月
+                        return {"response": "16日"}
+                    elif years == 5: #5年6か月
+                        return {"response": "18日"}
+                    elif years >=6: #6年6か月以上
+                        return {"response": "20日"}
+
+            # ==========ここまでPythonで判定、以降はテキスト質問のみGroqを実行==========
+            full_rules = get_rules_text()
+            # rules.txtをブロック分割
             block_kyuka = re.search(r"\[休暇規定\]([\s\S]*?)\[慶弔見舞金\]", full_rules).group(1)
             block_keijou = re.search(r"\[慶弔見舞金\]([\s\S]*?)\[災害補償\]", full_rules).group(1)
             block_saigai = re.search(r"\[災害補償\]([\s\S]*?)\[給与・手当・評価\]", full_rules).group(1)
-            block_salary = re.search(r"\[給与・手当・評価\]([\s\S]*?)\[資格取得支援\]", full_rules).group(1)
+            block_salary = re.search(r"\[給与・手当・評価\]([\s\S]*?)\[勤怠・提出・連絡ルール\]", full_rules).group(1)
             block_kintai = re.search(r"\[勤怠・提出・連絡ルール\][\s\S]*$", full_rules).group(0)
 
             selected_text = ""
-            # キーワードにより必要なブロックだけ選択
-            if any(word in question for word in ["休暇", "有給", "結婚", "死亡", "出産", "弔慰金"]):
+            if any(word in question for word in ["休暇", "出産", "死亡", "弔慰金"]):
                 selected_text += block_kyuka + block_keijou
             if any(word in question for word in ["給与", "基本給", "手当", "昇給", "災害補償"]):
                 selected_text += block_saigai + block_salary
             if any(word in question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡"]):
                 selected_text += block_kintai
             
-            # どのカテゴリにも該当しない場合Groqを呼び出さない
             if selected_text == "":
                 return {"response": "資料に記載がありません"}
 
