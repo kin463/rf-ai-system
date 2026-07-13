@@ -1,12 +1,21 @@
 import os
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
 from database import get_member_schedule
 
 app = FastAPI()
 
-# 確保環境變數已設定
+# 設定 CORS，允許來自任何來源的前端存取 API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 若需提升安全性，可設定為您的前端網域
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 初始化 Groq 客戶端
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 class ChatRequest(BaseModel):
@@ -28,6 +37,7 @@ def get_rules_text():
 async def chat(request: ChatRequest):
     system_prompt = "あなたは会社の親切で正確なアシスタントです。"
     
+    # 模式處理：歸社日查詢 (kisha) 或 規定查詢 (faq/rule)
     if request.mode == "kisha":
         results = get_member_schedule(request.message)
         if not results:
@@ -41,7 +51,10 @@ async def chat(request: ChatRequest):
     try:
         completion = client.chat.completions.create(
             model="llama3-70b-8192",
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": final_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt}, 
+                {"role": "user", "content": final_prompt}
+            ],
             temperature=0.3
         )
         return {"response": completion.choices[0].message.content}
