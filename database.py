@@ -9,17 +9,32 @@ def get_member_schedule(input_name: str):
         return []
 
     results = []
-    # 「課」だけでなく「部」にも対応するように修正
-    pattern = re.compile(r"\[(RandF .+?)\]\s*メンバー:(.+?)\n帰社日:(.+?)(?=\n\[|$)", re.DOTALL)
-    for department, member_text, date_text in pattern.findall(content):
+    # パターンを2種類用意
+    # パターン1：帰社日が存在するグループ（〇〇課）
+    pattern_with_date = re.compile(r"\[(RandF .+?)\]\s*メンバー:(.+?)\n帰社日:(.+?)(?=\n\[|$)", re.DOTALL)
+    # パターン2：帰社日の記載がないグループ（営業部）
+    pattern_no_date = re.compile(r"\[(RandF .+?部)\]\s*メンバー:(.+?)(?=\n\[|$)", re.DOTALL)
+
+    # 帰社日ありのグループを処理
+    for department, member_text, date_text in pattern_with_date.findall(content):
         member_list = [name.strip() for name in member_text.split(",")]
-        # 入力が部門名に部分一致したら課の全員を追加
         if input_name in department:
             for name in member_list:
                 results.append((name, department, date_text.strip()))
-        # 入力が人名に部分一致する場合
         else:
             for name in member_list:
                 if input_name in name:
                     results.append((name, department, date_text.strip()))
+
+    # 帰社日がない営業部を処理（date_textを空文字列とする）
+    for department, member_text in pattern_no_date.findall(content):
+        member_list = [name.strip() for name in member_text.split(",")]
+        if input_name in department:
+            for name in member_list:
+                results.append((name, department, ""))
+        else:
+            for name in member_list:
+                if input_name in name:
+                    results.append((name, department, ""))
+
     return results
