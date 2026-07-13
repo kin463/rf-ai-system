@@ -22,6 +22,7 @@ class FeedbackRequest(BaseModel):
 async def save_feedback(request: FeedbackRequest):
     feedback_file = "feedback.json"
     data = []
+    # 既存の記録があれば読み込む
     if os.path.exists(feedback_file):
         with open(feedback_file, "r", encoding="utf-8") as f:
             try:
@@ -29,7 +30,10 @@ async def save_feedback(request: FeedbackRequest):
             except:
                 data = []
     
+    # 新しいフィードバックを追加
     data.append(request.dict())
+    
+    # ファイルに保存
     with open(feedback_file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return {"status": "success"}
@@ -48,7 +52,8 @@ async def chat(request: ChatRequest):
         if os.path.exists("feedback.json"):
             with open("feedback.json", "r", encoding="utf-8") as f:
                 feedbacks = json.load(f)
-                feedback_data = "\n【過去の修正履歴（優先的に反映すること）】\n" + json.dumps(feedbacks, ensure_ascii=False)
+                if feedbacks:
+                    feedback_data = "\n【過去の修正履歴（優先的に反映すること）】\n" + json.dumps(feedbacks, ensure_ascii=False)
     except Exception as e:
         return {"response": f"ファイル読み込みエラー: {str(e)}"}
 
