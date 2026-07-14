@@ -82,7 +82,7 @@ async def chat(request: ChatRequest):
                     lines.append(f"{fullname} {dept}：帰社日：{date_time}")
             content_text = "\n".join(lines)
             reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
-            return {"response"}
+            return {"response": reply}
 
         else:
             question = request.message.strip()
