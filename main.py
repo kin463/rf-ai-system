@@ -1,5 +1,6 @@
 import os
 import re
+import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -49,6 +50,27 @@ def extract_year(text: str):
         return int(nums[0])
     return None
 
+# 追加：社員名抽出、会話状態管理関数
+def extract_name(input_text: str):
+    match = re.search(r"([一-龥]{2,6})(の|が)", input_text)
+    if match:
+        return match.group(1)
+    return None
+
+def set_session(state_name):
+    with open("session_temp.json","w",encoding="utf-8") as f:
+        json.dump({"state": state_name}, f)
+
+def clear_session():
+    if os.path.exists("session_temp.json"):
+        os.remove("session_temp.json")
+
+def get_session():
+    if os.path.exists("session_temp.json"):
+        with open("session_temp.json","r",encoding="utf-8") as f:
+            return json.load(f).get("state")
+    return None
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     system_prompt = """
@@ -61,6 +83,22 @@ async def chat(request: ChatRequest):
     5. 回答は簡潔な日本語にまとめ、余分な解説文を記述しない。
     """
     try:
+        # 先に結婚年数待ちセッション判定
+        session_state = get_session()
+        if session_state == "kekkon" and request.mode == "faq":
+            input_num = extract_year(request.message)
+            if input_num is not None:
+                if input_num < 2:
+                    res = "2万円"
+                elif 2 <= input_num < 5:
+                    res = "3万円"
+                else:
+                    res = "5万円"
+                clear_session()
+                return {"response": res}
+            else:
+                return {"response": "数字のみで勤続年数を入力してください。"}
+
         if request.mode == "kisha":
             raw_input = request.message.strip()
             # 文章中の「〇〇の」形式の漢字名を優先抽出
@@ -86,9 +124,12 @@ async def chat(request: ChatRequest):
 
         else:
             question = request.message.strip()
+            # 文章から社員名を削除した純粋な質問を作成
+            pure_question = re.sub(r"([一-龥]{2,6})(の|が)","",question).strip()
+
             # ==========Python側で数値判断を実行（Groqを呼び出さない）==========
-            # 1.結婚祝い金判定
-            if "結婚祝い" in question or "結婚祝金" in question:
+            # 1.結婚祝い金判定（人名混じり文章に対応）
+            if "結婚祝い" in question or "結婚祝金" in question or "結婚" in question:
                 years = extract_year(question)
                 if years is not None:
                     if years < 2:
@@ -97,6 +138,10 @@ async def chat(request: ChatRequest):
                         return {"response": "3万円"}
                     elif years >= 5:
                         return {"response": "5万円"}
+                else:
+                    # 年数が無い場合、待機状態に切り替え
+                    set_session("kekkon")
+                    return {"response": "勤続年数を教えてください。"}
 
             # 2.年次有給休暇の日数判定
             if "有給休暇" in question or "年次有給" in question:
@@ -127,12 +172,12 @@ async def chat(request: ChatRequest):
             block_kintai = re.search(r"\[勤怠・提出・連絡ルール\][\s\S]*$", full_rules).group(0)
 
             selected_text = ""
-            if any(word in question for word in ["休暇", "出産", "死亡", "弔慰金"]):
+            # キーワードに結婚追加、pure_question（名前除去済）で判定
+            if any(word in pure_question for word in ["休暇", "出産", "死亡", "弔慰金","結婚"]):
                 selected_text += block_kyuka + block_keijou
-            if any(word in question for word in ["給与", "基本給", "手当", "昇給", "災害補償"]):
+            if any(word in pure_question for word in ["給与", "基本給", "手当", "昇給", "災害補償"]):
                 selected_text += block_saigai + block_salary
-            # 帰社キーワード追加済、既存勤怠機能完全維持
-            if any(word in question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡", "帰社"]):
+            if any(word in pure_question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡", "帰社"]):
                 selected_text += block_kintai
             
             if selected_text == "":
@@ -143,7 +188,7 @@ async def chat(request: ChatRequest):
             【社内規定】
             {selected_text}
             【質問】
-            {request.message}
+            {pure_question}
             """
             completion = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
