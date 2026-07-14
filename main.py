@@ -68,7 +68,7 @@ async def chat(request: ChatRequest):
             if name_match:
                 search_key = name_match.group(1)
             else:
-                # 「山田」「RandF 営業部」単独入力の場合はそのまま検索
+                # 「社員名」「チーム名」単独入力の場合はそのまま検索
                 search_key = raw_input
 
             results = get_member_schedule(search_key)
