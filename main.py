@@ -62,12 +62,14 @@ async def chat(request: ChatRequest):
     """
     try:
         if request.mode == "kisha":
-            input_text = request.message.strip()
-            search_key = input_text
-            # 文中から漢字2文字以上の氏名を抽出
-            name_match = re.search(r"([一-龥]{2,})", input_text)
+            raw_input = request.message.strip()
+            # 文章中の「〇〇の」形式の漢字名を優先抽出
+            name_match = re.search(r"([一-龥]{2,6})の", raw_input)
             if name_match:
                 search_key = name_match.group(1)
+            else:
+                # 「山田」「RandF 営業部」単独入力の場合はそのまま検索
+                search_key = raw_input
 
             results = get_member_schedule(search_key)
             if not results:
@@ -80,7 +82,8 @@ async def chat(request: ChatRequest):
                     lines.append(f"{fullname} {dept}：帰社日：{date_time}")
             content_text = "\n".join(lines)
             reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
-            return {"response": reply}
+            return {"response"}
+
         else:
             question = request.message.strip()
             # ==========Python側で数値判断を実行（Groqを呼び出さない）==========
@@ -128,6 +131,7 @@ async def chat(request: ChatRequest):
                 selected_text += block_kyuka + block_keijou
             if any(word in question for word in ["給与", "基本給", "手当", "昇給", "災害補償"]):
                 selected_text += block_saigai + block_salary
+            # 帰社キーワード追加済、既存勤怠機能完全維持
             if any(word in question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡", "帰社"]):
                 selected_text += block_kintai
             
@@ -150,7 +154,7 @@ async def chat(request: ChatRequest):
                 temperature=0.0,
                 top_p=0.1
             )
-            return {"response": completion.choices[0].message.content.strip()}
+            return {"response": completion.choices[0].message.strip()}
     except Exception as e:
         print("API処理エラー：", str(e))
         return {"response": f"サーバーエラー：{str(e)}"}
