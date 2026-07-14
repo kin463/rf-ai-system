@@ -62,12 +62,22 @@ async def chat(request: ChatRequest):
     """
     try:
         if request.mode == "kisha":
-            results = get_member_schedule(request.message)
+            input_text = request.message.strip()
+            search_key = input_text
+            # 文中から漢字2文字以上の氏名を抽出
+            name_match = re.search(r"([一-龥]{2,})", input_text)
+            if name_match:
+                search_key = name_match.group(1)
+
+            results = get_member_schedule(search_key)
             if not results:
                 return {"response": "該当するメンバーが見つかりませんでした。"}
             lines = []
             for fullname, dept, date_time in results:
-                lines.append(f"{fullname} {dept}：帰社日：{date_time}")
+                if date_time == "":
+                    lines.append(f"{fullname} {dept}：帰社日は設定されていません")
+                else:
+                    lines.append(f"{fullname} {dept}：帰社日：{date_time}")
             content_text = "\n".join(lines)
             reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
             return {"response": reply}
