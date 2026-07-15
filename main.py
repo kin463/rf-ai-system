@@ -1,18 +1,14 @@
 import os
 import re
-import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from groq import Groq
-from database import get_member_schedule
+from openpyxl import load_workbook
 
 app = FastAPI()
-
 app.mount("/static", StaticFiles(directory="."), name="static")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,11 +16,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
 class ChatRequest(BaseModel):
     message: str
     mode: str
+
+# Excelを読み込む関数
+def read_excel_all():
+    wb = load_workbook("master.xlsx")
+    # シート2：帰社日検索マスタ
+    ws_kisha = wb["2. 帰社日検索マスタ"]
+    kisha_data = []
+    for row in ws_kisha.iter_rows(min_row=2, values_only=True):
+        fullname, dept, kisha_date = row
+        if fullname is None:
+            continue
+        kisha_data.append([fullname.strip(), dept if dept else "", kisha_date if kisha_date is not None else ""])
+
+    # シート3：勤怠規定マスタ（A規定ID B大分類 C小分類 D規定内容 E適用条件 F備考）
+    ws_rule = wb["3. 勤怠規定マスタ"]
+    rule_data = []
+    for row in ws_rule.iter_rows(min_row=2, values_only=True):
+        rule_id, big_class, small_class, content, condition, note = row
+        if small_class is None or content is None:
+            continue
+        rule_data.append([small_class.strip(), content.strip()])
+
+    # シート4：結婚祝金・有給休暇計算マスタ
+    ws_calc = wb["4. 結婚祝金･有給休暇計算マスタ"]
+    calc_data = []
+    for row in ws_calc.iter_rows(min_row=2, values_only=True):
+        kind, years, result = row
+        calc_data.append([kind, years, result])
+    wb.close()
+    return kisha_data, rule_data, calc_data
+
+# 文章から数字抽出
+def extract_year(text: str):
+    nums = re.findall(r"\d+", text)
+    if nums:
+        return int(nums[0])
+    return None
+
+# 質問文から社員名抽出「XXの」「XXが」に対応
+def extract_name(input_text: str):
+    match = re.search(r"([一-龥]{2,6})(の|が)", input_text)
+    if match:
+        return match.group(1).strip()
+    return input_text.strip()
 
 @app.get("/health")
 async def health():
@@ -35,171 +73,80 @@ async def root():
     html_file = os.path.join(os.path.dirname(__file__), "index.html")
     return FileResponse(html_file)
 
-def get_rules_text():
-    try:
-        with open("rules.txt", "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    except Exception as e:
-        print("rules.txt読み込み失敗:", str(e))
-        return "規定データが読み込めません。"
-
-def extract_year(text: str):
-    """文章から数字（勤続年数）を抜き出す"""
-    nums = re.findall(r"\d+", text)
-    if nums:
-        return int(nums[0])
-    return None
-
-# 追加：社員名抽出、会話状態管理関数
-def extract_name(input_text: str):
-    match = re.search(r"([一-龥]{2,6})(の|が)", input_text)
-    if match:
-        return match.group(1)
-    return None
-
-def set_session(state_name):
-    with open("session_temp.json","w",encoding="utf-8") as f:
-        json.dump({"state": state_name}, f)
-
-def clear_session():
-    if os.path.exists("session_temp.json"):
-        os.remove("session_temp.json")
-
-def get_session():
-    if os.path.exists("session_temp.json"):
-        with open("session_temp.json","r",encoding="utf-8") as f:
-            return json.load(f).get("state")
-    return None
-
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    system_prompt = """
-    絶対に守るルール：
-    1. 渡された社内規定のテキストだけを参照して回答してください。
-    2. 規定文に記載されていない事柄については、余計な文章を一切追加せず「資料に記載がありません」の一文だけを返答する。
-    3. 自分の知識や一般常識、外部情報を使って推測・補足しては絶対にいけません。
-    4. 条件が限定されている場合は対象範囲を勝手に広げない。
-       例：本人結婚の休暇は本人のみ適用、友人の結婚は対象外と判断する。
-    5. 回答は簡潔な日本語にまとめ、余分な解説文を記述しない。
-    """
     try:
-        # 先に結婚年数待ちセッション判定
-        session_state = get_session()
-        if session_state == "kekkon" and request.mode == "faq":
-            input_num = extract_year(request.message)
-            if input_num is not None:
-                if input_num < 2:
-                    res = "2万円"
-                elif 2 <= input_num < 5:
-                    res = "3万円"
-                else:
-                    res = "5万円"
-                clear_session()
-                return {"response": res}
-            else:
-                return {"response": "数字のみで勤続年数を入力してください。"}
+        input_msg = request.message.strip()
+        kisha_data, rule_data, calc_data = read_excel_all()
 
+        # ========== kishaモード：帰社日検索 ==========
         if request.mode == "kisha":
-            raw_input = request.message.strip()
-            # 文章中の「〇〇の」形式の漢字名を優先抽出
-            name_match = re.search(r"([一-龥]{2,6})の", raw_input)
-            if name_match:
-                search_key = name_match.group(1)
-            else:
-                # 「社員名」「チーム名」単独入力の場合はそのまま検索
-                search_key = raw_input
-
-            results = get_member_schedule(search_key)
-            if not results:
+            search_name = extract_name(input_msg)
+            find_result = []
+            for fullname, dept, kisha_date in kisha_data:
+                if search_name in fullname:
+                    find_result.append([fullname, dept, kisha_date])
+            if len(find_result) == 0:
                 return {"response": "該当するメンバーが見つかりませんでした。"}
-            lines = []
-            for fullname, dept, date_time in results:
-                if date_time == "":
-                    lines.append(f"{fullname} {dept}：帰社日は設定されていません")
+            output_lines = []
+            for name, dept, dt in find_result:
+                if dt == "":
+                    output_lines.append(f"{name} {dept}：帰社日は設定されていません")
                 else:
-                    lines.append(f"{fullname} {dept}：帰社日：{date_time}")
-            content_text = "\n".join(lines)
-            reply = f"ご確認いただきありがとうございます。該当者の帰社日は以下です。\n{content_text}"
-            return {"response": reply}
+                    output_lines.append(f"{name} {dept}：帰社日：{dt}")
+            reply_text = "ご確認いただきありがとうございます。該当者の帰社日は以下です。\n" + "\n".join(output_lines)
+            return {"response": reply_text}
 
+        # ========== faqモード：勤怠規定検索 ==========
         else:
-            question = request.message.strip()
-            # 文章から社員名を削除した純粋な質問を作成
-            pure_question = re.sub(r"([一-龥]{2,6})(の|が)","",question).strip()
+            question = input_msg
+            years = extract_year(question)
 
-            # ==========Python側で数値判断を実行（Groqを呼び出さない）==========
-            # 1.結婚祝い金判定（人名混じり文章に対応）
-            if "結婚祝い" in question or "結婚祝金" in question or "結婚" in question:
-                years = extract_year(question)
+            # 1.結婚祝金の判定
+            if "結婚" in question:
                 if years is not None:
                     if years < 2:
                         return {"response": "2万円"}
                     elif 2 <= years < 5:
                         return {"response": "3万円"}
-                    elif years >= 5:
+                    else:
                         return {"response": "5万円"}
                 else:
-                    # 年数が無い場合、待機状態に切り替え
-                    set_session("kekkon")
-                    return {"response": "勤続年数を教えてください。"}
+                    return {"response": "勤続年数を数字で記入してください。"}
 
-            # 2.年次有給休暇の日数判定
+            # 2.有給休暇判定
             if "有給休暇" in question or "年次有給" in question:
-                years = extract_year(question)
                 if years is not None:
-                    if years == 0: #入社6か月
+                    if years == 0:
                         return {"response": "10日"}
-                    elif years == 1: #1年6か月
+                    elif years == 1:
                         return {"response": "11日"}
-                    elif years == 2: #2年6か月
+                    elif years == 2:
                         return {"response": "12日"}
-                    elif years == 3: #3年6か月
+                    elif years == 3:
                         return {"response": "14日"}
-                    elif years == 4: #4年6か月
+                    elif years == 4:
                         return {"response": "16日"}
-                    elif years == 5: #5年6か月
+                    elif years == 5:
                         return {"response": "18日"}
-                    elif years >=6: #6年6か月以上
+                    elif years >= 6:
                         return {"response": "20日"}
 
-            # ==========ここまでPythonで判定、以降はテキスト質問のみGroqを実行==========
-            full_rules = get_rules_text()
-            # rules.txtをブロック分割
-            block_kyuka = re.search(r"\[休暇規定\]([\s\S]*?)\[慶弔見舞金\]", full_rules).group(1)
-            block_keijou = re.search(r"\[慶弔見舞金\]([\s\S]*?)\[災害補償\]", full_rules).group(1)
-            block_saigai = re.search(r"\[災害補償\]([\s\S]*?)\[給与・手当・評価\]", full_rules).group(1)
-            block_salary = re.search(r"\[給与・手当・評価\]([\s\S]*?)\[勤怠・提出・連絡ルール\]", full_rules).group(1)
-            block_kintai = re.search(r"\[勤怠・提出・連絡ルール\][\s\S]*$", full_rules).group(0)
-
-            selected_text = ""
-            # キーワードに結婚追加、pure_question（名前除去済）で判定
-            if any(word in pure_question for word in ["休暇", "出産", "死亡", "弔慰金","結婚"]):
-                selected_text += block_kyuka + block_keijou
-            if any(word in pure_question for word in ["給与", "基本給", "手当", "昇給", "災害補償"]):
-                selected_text += block_saigai + block_salary
-            if any(word in pure_question for word in ["寝坊", "遅刻", "欠勤", "提出", "連絡", "帰社"]):
-                selected_text += block_kintai
-            
-            if selected_text == "":
+            # 3.Excelの小分類から回答を取得
+            answer = ""
+            for small_class, rule_content in rule_data:
+                if small_class in question:
+                    answer = rule_content
+                    break
+            if answer != "":
+                return {"response": answer}
+            else:
                 return {"response": "資料に記載がありません"}
 
-            final_prompt = f"""
-            社内規定の記載内容だけを使用し回答してください。記載されていない内容に対しては「資料に記載がありません」と返してください。
-            【社内規定】
-            {selected_text}
-            【質問】
-            {pure_question}
-            """
-            completion = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": final_prompt}
-                ],
-                temperature=0.0,
-                top_p=0.1
-            )
-            return {"response": completion.choices[0].message.strip()}
     except Exception as e:
-        print("API処理エラー：", str(e))
+        print("エラー詳細：", str(e))
         return {"response": f"サーバーエラー：{str(e)}"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
